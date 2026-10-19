@@ -171,7 +171,7 @@ function renderWhatIf() {
     </div>
     <p class="note" id="wi-note"></p>
     <h3>${T.byWeek}</h3><div class="chart" id="ch-whatif"></div>
-    <h3>${T.sweep}</h3><div class="chart" id="ch-sweep"></div>`;
+    <h3>${T.sweep}</h3><p class="note" id="sweep-status"></p><div class="chart" id="ch-sweep"></div>`;
   for (const s of SLIDERS) {
     $(`sl-${s.key}`).oninput = (e) => {
       state.values[s.key] = Number(e.target.value);
@@ -227,13 +227,14 @@ function showWhatIf() {
 function updateSweep() {
   const gen = ++sweepGen, p = params(), r = range(), xs = [], rs = [];
   lastSweep = null;
+  $('sweep-status').textContent = T.computing;   // retiré à la fin ; un balayage qui remplace celui-ci le garde
   const step = () => {
     if (gen !== sweepGen) return;
     const n = 50_000 + xs.length * 25_000;
     xs.push(n);
     rs.push(whatIf(SESSIONS, { ...p, threshold: n }, r));
     if (n < 500_000) setTimeout(step, 0);
-    else { lastSweep = { xs, rs }; showSweep(); }
+    else { lastSweep = { xs, rs }; $('sweep-status').textContent = ''; showSweep(); }
   };
   requestAnimationFrame(() => setTimeout(step, 0));
 }

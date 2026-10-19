@@ -137,3 +137,19 @@ test('préréglage nommé pour ce qu’il est : tous les leviers aux valeurs par
   await page.goto(fullUrl);
   await expect(page.locator('#wi-optimum')).toHaveText('Tous les leviers (valeurs par défaut)');
 });
+
+test('balayage en cours : « Calcul en cours… » affiché, puis retiré à la fin', async ({ page }) => {
+  await page.goto(fullUrl);
+  const status = page.locator('#sweep-status');
+  await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);
+  await expect(status).toBeEmpty();
+  // lu dans la même tâche que l'événement : le balayage vient de démarrer, aucun morceau n'a tourné
+  const during = await page.locator('#sl-socleCut').evaluate((el) => {
+    el.value = '20000';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));   // le second remplace le premier
+    return document.getElementById('sweep-status').textContent;
+  });
+  expect(during).toBe('Calcul en cours…');
+  await expect(status).toBeEmpty();
+});

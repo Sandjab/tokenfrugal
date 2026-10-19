@@ -67,6 +67,7 @@ export const T = {
   whatifNote: (n, summaries) => `${n} bascule${n > 1 ? 's' : ''} simulée${n > 1 ? 's' : ''}. Le coût réel inclut ${summaries} de résumés de compactage estimés (absents des journaux).`,
   byWeek: 'Réel et simulé par semaine',
   sweep: 'Coût simulé selon le seuil de bascule',
+  computing: 'Calcul en cours…',
   quality: 'Qualité de lecture',
   q: {
     sessions: 'Sessions relevées', stale: 'Sessions lues par une ancienne version (journaux purgés)',
