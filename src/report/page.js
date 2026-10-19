@@ -1,8 +1,8 @@
 // src/report/page.js — rendu de la page (navigateur seulement) : lit les données embarquées et
 // calcule avec src/model, le même code que le CLI (spec § 8).
 import { priceFor } from '../model/pricing.js';
-import { isoWeek, median } from '../model/util.js';
-import { weekly, mergeWeeks } from '../model/metrics.js';
+import { isoWeek, median, weekStart } from '../model/util.js';
+import { weekly, mergeWeeks, trendWeeks } from '../model/metrics.js';
 import { whatIf, measuredDefaults, DEFAULTS } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
 import { T, fmtCost, fmtTok, fmtPct, fmtShare, recommendationText } from './strings.js';
@@ -36,9 +36,11 @@ const fmtSlider = (key, v) => (key === 'pauseSwitchMin' ? `${v} min` : fmtTok(v)
 const rows = (pairs) => pairs.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('');
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 
+// Période : les n semaines ISO qui finissent par celle du dernier tour, du lundi 00:00 local au dernier
+// tour. Tableaux et what-if couvrent ainsi exactement les mêmes jours.
 function range() {
   const n = { all: 0, w12: 12, w4: 4 }[state.period];
-  return n ? { from: LAST - n * 7 * 86_400, to: LAST + 1 } : {};
+  return n ? { from: weekStart(LAST, n - 1), to: LAST + 1 } : {};
 }
 function periodWeeks() {
   const r = range();
@@ -87,13 +89,13 @@ function renderHeader() {
 }
 
 function renderSummary() {
-  const ws = periodWeeks(), tot = mergeWeeks(ws), last = ws.at(-1), prev = ws.at(-2);
-  const trend = last && prev && val(prev.cost) > 0 ? (val(last.cost) - val(prev.cost)) / val(prev.cost) : null;
+  const ws = periodWeeks(), tot = mergeWeeks(ws), tw = trendWeeks(ws, DATA.generated);
+  const trend = tw && val(tw.prev.cost) > 0 ? (val(tw.last.cost) - val(tw.prev.cost)) / val(tw.prev.cost) : null;
   const recos = RECOS.slice(0, 3);
   $('summary').innerHTML = `<h2>${T.summary}</h2>
     ${SESSIONS.length ? '' : `<p>${T.empty}</p>`}
     <p class="big">${money(tot.cost)}</p>
-    <p>${T.weeks(ws.length)}${trend === null ? '' : ` · ${T.trend(fmtPct(trend))}`}</p>
+    <p>${T.weeks(ws.length)}${trend === null ? '' : ` · ${T.trend(fmtPct(trend), tw.last.week, tw.prev.week)}`}</p>
     <h3>${T.recommendations}</h3>
     ${recos.length ? `<ol>${recos.map((r) => `<li>${esc(recommendationText(r, state.unit))}</li>`).join('')}</ol>` : `<p>${T.noRecommendation}</p>`}`;
 }

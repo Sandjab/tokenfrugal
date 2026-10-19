@@ -29,7 +29,7 @@ export const T = {
   summary: 'Résumé',
   empty: 'Aucune session relevée pour l’instant.',
   weeks: (n) => `${n} semaine${n > 1 ? 's' : ''}`,
-  trend: (p) => `${p} par rapport à la semaine précédente`,
+  trend: (p, week, prev) => `${week} : ${p} par rapport à ${prev}`,
   recommendations: 'Quoi changer en premier',
   noRecommendation: 'Aucun levier ne fait gagner sur les 4 dernières semaines.',
   history: 'Historique par semaine',

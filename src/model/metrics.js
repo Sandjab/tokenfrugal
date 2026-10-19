@@ -1,6 +1,6 @@
 // src/model/metrics.js — indicateurs par semaine ISO, heure locale (spec § 7.3).
 import { partsOf, costOf } from './cost.js';
-import { ctxOf, isoWeek, isRebuild, zero, add, mainIndexes } from './util.js';
+import { ctxOf, isoWeek, prevWeek, isRebuild, zero, add, mainIndexes } from './util.js';
 
 export const CTX_BUCKETS = [50_000, 100_000, 150_000, 200_000];   // < 50 k, 50–100 k, …, > 200 k
 const BIG_CTX = 150_000;
@@ -84,4 +84,13 @@ export function mergeWeeks(weeks) {
     m.maxCtx = Math.max(m.maxCtx, w.maxCtx);
   }
   return m;
+}
+
+// Tendance (spec § 8) : la dernière semaine complète présente (celle de `generated` est en cours, donc
+// exclue) et la semaine calendaire d'avant ; null si celle-ci n'a pas de données. weeks : triées.
+export function trendWeeks(weeks, generated) {
+  const current = isoWeek(generated);
+  const last = weeks.filter((w) => w.week < current).at(-1);
+  const prev = last && weeks.find((w) => w.week === prevWeek(last.week));
+  return prev ? { last, prev } : null;
 }

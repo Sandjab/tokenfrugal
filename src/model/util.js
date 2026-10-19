@@ -32,6 +32,21 @@ export function isoWeek(sec) {
   return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
+// Lundi 00:00 (heure locale) de la semaine qui contient sec, reculé de `back` semaines. Le calcul se fait
+// en jours du calendrier, pas en secondes : un changement d'heure ne décale pas la borne.
+export function weekStart(sec, back = 0) {
+  const d = new Date(sec * 1000);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7) - 7 * back).getTime() / 1000;
+}
+
+// Semaine ISO calendaire qui précède, ex. '2027-W01' → '2026-W53'. Le 4 janvier est toujours en W01 ;
+// on se place à midi du lundi visé, à l'abri des changements d'heure.
+export function prevWeek(key) {
+  const [y, w] = key.split('-W').map(Number);
+  const jan4 = new Date(y, 0, 4);
+  return isoWeek(new Date(y, 0, 4 - ((jan4.getDay() + 6) % 7) + 7 * (w - 2), 12).getTime() / 1000);
+}
+
 export const zero = () => ({ usd: 0, wtok: 0 });
 
 export function add(acc, c) {

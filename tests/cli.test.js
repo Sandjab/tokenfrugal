@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { T0, assistant, writeProjects, tmpStore } from './helpers/logs.js';
@@ -29,6 +29,10 @@ test('report : relève, écrit la page, affiche recommandations et chemin', () =
   assert.match(r.stdout, /Quoi changer en premier/);
   assert.match(r.stdout, /Page écrite/);
   assert.ok(existsSync(path.join(store, 'report.html')));
+  // date de génération embarquée : la page en déduit la semaine en cours, incomplète (spec § 8)
+  const json = /<script type="application\/json" id="tf-data">([\s\S]*?)<\/script>/.exec(readFileSync(path.join(store, 'report.html'), 'utf8'))[1];
+  const { generated } = JSON.parse(json);
+  assert.ok(Number.isInteger(generated) && Math.abs(generated - Date.now() / 1000) < 60, String(generated));
 });
 
 test('dossier de journaux vide, ou stockage vide sans relevé : la page est écrite quand même', () => {

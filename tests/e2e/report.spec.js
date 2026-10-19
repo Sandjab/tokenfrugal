@@ -7,7 +7,7 @@ import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
 import { T0, writeProjects, tmpStore, assistant, user } from '../helpers/logs.js';
 
-let fullUrl, emptyUrl;
+let fullUrl, emptyUrl, weeksUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -24,6 +24,19 @@ test.beforeAll(async () => {
   writeFileSync(full, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(store) }));
   const empty = path.join(tmpStore(), 'report.html');
   writeFileSync(empty, buildReport({ analyzer: ANALYZER_VERSION, sessions: [] }));
+  // Une session le mercredi de chacune des 6 semaines qui précèdent celle du relevé (2026-W37 à W42) ;
+  // le relevé a lieu le mercredi de 2026-W43.
+  const DAY = 86_400, wed = T0 + 2 * DAY;
+  const sixWeeks = {};
+  for (let k = 0; k < 6; k++) {
+    const t = wed - k * 7 * DAY;
+    sixWeeks[`w${k}`] = { main: [user({ t }), assistant({ t: t + 5, input: 10, cw: 30_000 + k * 1_000 }), assistant({ t: t + 65, input: 10, cr: 30_000, cw: 2_000 })] };
+  }
+  const store6 = tmpStore();
+  await collect({ projectsDir: writeProjects({ demo: sixWeeks }), storeDir: store6 });
+  const weeksFile = path.join(store6, 'report.html');
+  writeFileSync(weeksFile, buildReport({ analyzer: ANALYZER_VERSION, generated: wed + 7 * DAY, sessions: await loadSessions(store6) }));
+  weeksUrl = pathToFileURL(weeksFile).href;
   fullUrl = pathToFileURL(full).href;
   emptyUrl = pathToFileURL(empty).href;
 });
@@ -64,4 +77,17 @@ test('page sans données : message clair, aucune erreur JavaScript', async ({ pa
   await page.goto(emptyUrl);
   await expect(page.locator('#summary')).toContainText('Aucune session relevée');
   expect(errors).toEqual([]);
+});
+
+test('« 4 semaines » : exactement 4 semaines ISO dans les tableaux, la dernière comprise', async ({ page }) => {
+  await page.goto(weeksUrl);
+  await page.locator('#period').selectOption('w4');
+  await expect(page.locator('#summary')).toContainText('4 semaines');
+  await expect(page.locator('#history .scroll tbody tr')).toHaveCount(4);
+  await expect(page.locator('#history .scroll tbody tr').first()).toContainText('2026-W39');
+});
+
+test('tendance : dernière semaine complète comparée à la semaine calendaire d’avant, toutes deux nommées', async ({ page }) => {
+  await page.goto(weeksUrl);
+  await expect(page.locator('#summary')).toContainText(/2026-W42 : [+−-]?\d+ % par rapport à 2026-W41/);
 });

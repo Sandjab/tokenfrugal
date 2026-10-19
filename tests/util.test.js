@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isoWeek, median, isRebuild } from '../src/model/util.js';
+import { isoWeek, median, isRebuild, weekStart, prevWeek } from '../src/model/util.js';
 import { session } from './helpers/model.js';
 
 const local = (...a) => new Date(...a).getTime() / 1000;   // heure locale : test indépendant du fuseau
@@ -24,4 +24,22 @@ test('reconstruction : plus de 5 min de pause, ≥ 10 k écrits, moins lus qu’
   assert.equal(isRebuild(s, 1, 300), false);   // cache 5 min encore valable
   assert.equal(isRebuild(s, 2, 301), false);   // trop petit pour compter
   assert.equal(isRebuild(s, 3, 301), false);   // le cache a servi
+});
+
+test('début de semaine : lundi 00:00 local, y compris en reculant par-dessus un changement d’heure', () => {
+  assert.equal(weekStart(local(2026, 9, 21, 15)), local(2026, 9, 19));       // mercredi → lundi 19 oct.
+  assert.equal(weekStart(local(2026, 9, 19, 0)), local(2026, 9, 19));        // lundi 00:00 : lui-même
+  assert.equal(weekStart(local(2026, 9, 25, 23, 59)), local(2026, 9, 19));   // dimanche soir
+  // 1er nov. → 26 oct., puis trois semaines avant : 5 oct. (le passage à l'heure d'hiver du 25 oct. est
+  // entre les deux en Europe ; un recul de 3 × 7 × 86 400 s tomberait à 23:00 ou 01:00)
+  assert.equal(weekStart(local(2026, 10, 1, 12), 3), local(2026, 9, 5));
+  assert.equal(isoWeek(weekStart(local(2026, 10, 1, 12), 3)), '2026-W41');
+});
+
+test('semaine précédente : calendaire, passage d’année compris (W01 ↔ W52/W53)', () => {
+  assert.equal(prevWeek('2026-W43'), '2026-W42');
+  assert.equal(prevWeek('2026-W10'), '2026-W09');
+  assert.equal(prevWeek('2027-W01'), '2026-W53');   // 2026 a 53 semaines
+  assert.equal(prevWeek('2026-W01'), '2025-W52');   // 2025 en a 52
+  assert.equal(prevWeek('2026-W53'), '2026-W52');
 });

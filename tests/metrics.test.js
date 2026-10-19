@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { weekly, mergeWeeks } from '../src/model/metrics.js';
+import { weekly, mergeWeeks, trendWeeks } from '../src/model/metrics.js';
 import { session, near } from './helpers/model.js';
 
 const local = (...a) => new Date(...a).getTime() / 1000;
@@ -71,4 +71,16 @@ test('fusion de semaines : compteurs additionnés, listes mises bout à bout', (
 test('aucune session : aucune semaine, fusion vide', () => {
   assert.deepEqual(weekly([]), []);
   assert.equal(mergeWeeks([]).turns, 0);
+});
+
+// Tendance : semaine W = dernière semaine complète présente, comparée à W − 1 du calendrier.
+test('tendance : semaine en cours exclue, voisine calendaire et pas voisine de tableau', () => {
+  const ws = (...keys) => keys.map((week) => ({ week }));
+  const gen = local(2026, 9, 21, 12);   // mercredi de 2026-W43 : W43 est en cours
+  const pair = (r) => r && [r.last.week, r.prev.week];
+  assert.deepEqual(pair(trendWeeks(ws('2026-W41', '2026-W42', '2026-W43'), gen)), ['2026-W42', '2026-W41']);
+  assert.equal(trendWeeks(ws('2026-W40', '2026-W42', '2026-W43'), gen), null);   // W41 sans données
+  assert.equal(trendWeeks(ws('2026-W42'), gen), null);
+  assert.equal(trendWeeks(ws('2026-W43'), gen), null);                            // seule la semaine en cours
+  assert.deepEqual(pair(trendWeeks(ws('2026-W53', '2027-W01', '2027-W02'), local(2027, 0, 13))), ['2027-W01', '2026-W53']);
 });

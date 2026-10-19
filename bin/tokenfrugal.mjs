@@ -45,7 +45,7 @@ async function main(argv) {
     const sessions = await loadSessions(values.store);
     await mkdir(values.store, { recursive: true });
     const file = path.join(values.store, 'report.html');
-    await writeFile(file, buildReport({ analyzer: ANALYZER_VERSION, sessions }));
+    await writeFile(file, buildReport({ analyzer: ANALYZER_VERSION, generated: Math.floor(Date.now() / 1000), sessions }));
     const recos = recommend(sessions).slice(0, 3);
     console.log(T.cli.recommendations);
     if (!recos.length) console.log(`  ${T.cli.noRecommendation}`);
