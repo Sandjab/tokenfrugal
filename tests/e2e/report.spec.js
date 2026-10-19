@@ -91,3 +91,13 @@ test('tendance : dernière semaine complète comparée à la semaine calendaire 
   await page.goto(weeksUrl);
   await expect(page.locator('#summary')).toContainText(/2026-W42 : [+−-]?\d+ % par rapport à 2026-W41/);
 });
+
+test('la bascule d’unité réutilise les derniers résultats : what-if ni reconstruit ni rejoué', async ({ page }) => {
+  await page.goto(fullUrl);
+  await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);   // balayage terminé, par morceaux
+  await page.locator('#sl-socleCut').evaluate((el) => { el.tfMark = true; });
+  await page.locator('#unit-wtok').click();
+  await expect(page.locator('#wi-sim')).toContainText('tokens');
+  expect(await page.locator('#sl-socleCut').evaluate((el) => el.tfMark === true)).toBe(true);
+  await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);
+});

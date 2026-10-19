@@ -25,6 +25,8 @@ const SLIDERS = [
 const state = { unit: 'usd', period: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
 const charts = new Map();
 let pending = false;
+// Derniers résultats gardés : ils portent les deux unités, la bascule d'unité ne rejoue donc rien.
+let lastWhatIf = null, lastSweep = null, sweepGen = 0;
 
 const $ = (id) => document.getElementById(id);
 const esc = (x) => String(x).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -83,7 +85,7 @@ function renderHeader() {
     $(`unit-${u}`).onclick = () => {
       state.unit = u;
       for (const v of ['usd', 'wtok']) $(`unit-${v}`).setAttribute('aria-pressed', String(v === u));
-      render();
+      renderUnit();
     };
   }
 }
@@ -196,7 +198,11 @@ function scheduleWhatIf() {
   requestAnimationFrame(() => { pending = false; updateWhatIf(); });
 }
 function updateWhatIf() {
-  const r = whatIf(SESSIONS, params(), range());
+  lastWhatIf = whatIf(SESSIONS, params(), range());
+  showWhatIf();
+}
+function showWhatIf() {
+  const r = lastWhatIf;
   const gain = { usd: r.real.usd - r.sim.usd, wtok: r.real.wtok - r.sim.wtok };
   $('wi-real').textContent = money(r.real);
   $('wi-sim').textContent = money(r.sim);
@@ -207,13 +213,27 @@ function updateWhatIf() {
     { label: T.simulated, values: r.byWeek.map((w) => val(w.sim)) },
   ]);
 }
+// Balayage du seuil : un rejeu par tâche (setTimeout 0) pour que la page reste réactive, lancé après le
+// prochain affichage. Un balayage plus récent annule celui en cours (numéro de génération).
 function updateSweep() {
-  const xs = [], real = [], sim = [];
-  for (let n = 50_000; n <= 500_000; n += 25_000) {
-    const r = whatIf(SESSIONS, { ...params(), threshold: n }, range());
-    xs.push(fmtTok(n)); real.push(val(r.real)); sim.push(val(r.sim));
-  }
-  plot('ch-sweep', xs, [{ label: T.realCorrected, values: real }, { label: T.simulated, values: sim }]);
+  const gen = ++sweepGen, p = params(), r = range(), xs = [], rs = [];
+  lastSweep = null;
+  const step = () => {
+    if (gen !== sweepGen) return;
+    const n = 50_000 + xs.length * 25_000;
+    xs.push(n);
+    rs.push(whatIf(SESSIONS, { ...p, threshold: n }, r));
+    if (n < 500_000) setTimeout(step, 0);
+    else { lastSweep = { xs, rs }; showSweep(); }
+  };
+  requestAnimationFrame(() => setTimeout(step, 0));
+}
+function showSweep() {
+  if (!lastSweep) return;   // balayage en cours : il s'affichera à la fin
+  plot('ch-sweep', lastSweep.xs.map(fmtTok), [
+    { label: T.realCorrected, values: lastSweep.rs.map((x) => val(x.real)) },
+    { label: T.simulated, values: lastSweep.rs.map((x) => val(x.sim)) },
+  ]);
 }
 
 function renderQuality() {
@@ -227,6 +247,15 @@ function renderQuality() {
     [T.q.unpriced, unpriced.length ? unpriced.map(esc).join(', ') : '—'],
     ...Object.entries(ignored).sort((a, b) => b[1] - a[1]).map(([k, n]) => [T.q.ignored(esc(k)), n]),
   ])}</table>`;
+}
+
+// Changement d'unité : réaffichage seul, à partir des résultats gardés.
+function renderUnit() {
+  renderSummary();
+  renderHistory();
+  renderIndicators();
+  showWhatIf();
+  showSweep();
 }
 
 function render() {
