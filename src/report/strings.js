@@ -56,6 +56,7 @@ export const T = {
     socleCut: 'Socle fixe allégé de', threshold: 'Basculer dès un contexte de', pauseSwitchMin: 'Basculer avant une pause de plus de',
     cache1h: 'Cache 1 h au lieu de 5 min', R: 'Hypothèse R : taille de reprise', S: 'Hypothèse S : taille du résumé', P: 'Hypothèse P : pénalité de reprise',
   },
+  thresholdInactive: 'Sans effet : après une bascule, le contexte repartirait de R + P, qui n’est pas sous ce seuil.',
   hyp: { measured: (n) => `mesuré sur ${n} cas`, fallback: 'valeur par défaut faute de mesure', guess: 'supposition, à ajuster' },
   realCorrected: 'Coût réel corrigé',
   simulated: 'Coût simulé',

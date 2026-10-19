@@ -101,3 +101,22 @@ test('la bascule d’unité réutilise les derniers résultats : what-if ni reco
   expect(await page.locator('#sl-socleCut').evaluate((el) => el.tfMark === true)).toBe(true);
   await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);
 });
+
+test('seuil ≤ R + P : une note dit que le levier ne peut pas agir', async ({ page }) => {
+  await page.goto(fullUrl);
+  const note = page.locator('#note-threshold');
+  const setThreshold = (v) => page.locator('#sl-threshold').evaluate((el, x) => {
+    el.value = String(x);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, v);
+  await expect(page.locator('#wi-sim')).not.toBeEmpty();
+  await expect(note).toBeEmpty();               // 150 k > R + P = 50 k + 20 k (valeurs de repli)
+  await setThreshold(70_000);
+  await expect(note).toContainText('R + P');    // N = R + P : la bascule ne ramènerait pas sous N
+  await setThreshold(80_000);
+  await expect(note).toBeEmpty();
+  await setThreshold(50_000);
+  await expect(note).toContainText('R + P');
+  await page.locator('#on-threshold').uncheck();
+  await expect(note).toBeEmpty();               // levier coupé : rien à signaler
+});

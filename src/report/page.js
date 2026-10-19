@@ -149,6 +149,7 @@ function sliderHtml(s) {
     <output id="v-${s.key}">${fmtSlider(s.key, v)}</output>
     <input type="range" id="sl-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${v}">
     ${s.hyp ? `<small>${hypNote(s.key)}</small>` : ''}
+    ${s.key === 'threshold' ? '<small id="note-threshold"></small>' : ''}
   </div>`;
 }
 
@@ -200,6 +201,9 @@ function scheduleWhatIf() {
 function updateWhatIf() {
   lastWhatIf = whatIf(SESSIONS, params(), range());
   showWhatIf();
+  // seuil N ≤ R + P : une bascule ramènerait le contexte à R + P, pas sous N ; le levier ne joue pas
+  const v = state.values;
+  $('note-threshold').textContent = state.on.threshold && v.threshold <= v.R + v.P ? T.thresholdInactive : '';
 }
 function showWhatIf() {
   const r = lastWhatIf;
