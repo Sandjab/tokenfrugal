@@ -185,9 +185,19 @@ test('cache 1 h : écritures plus chères, mais une pause de 20 min ne casse plu
   assert.ok(r.sim.wtok < r.real.wtok);
 });
 
-test('pause et seuil sur le même tour : une seule bascule, la pause passe d’abord', () => {
+test('seuil puis pause sur deux tours différents : deux bascules', () => {
   const r = whatIf([PAUSE], { ...HYP, pauseSwitchMin: 15, threshold: 60_000 });
-  assert.equal(r.switches, 2);   // seuil sur t1, pause avant t2, jamais deux sur le même tour
+  assert.equal(r.switches, 2);   // seuil avant t1, pause avant t2
+});
+
+// Un seul tour où les deux leviers s'appliquent : 20 min de pause avant lui ET contexte au-dessus du
+// seuil. La pause passe d'abord et inscrit son résumé à la fin du tour précédent (T) ; le seuil
+// l'aurait inscrit au tour lui-même (T + 1 200). Un intervalle qui commence à T + 1 distingue les deux.
+test('pause et seuil sur le même tour : une seule bascule, celle de la pause, datée du tour précédent', () => {
+  const s = session([{ t: T, in: 10, cw: 40_000 }, { t: T + 1_200, in: 10, cw: 80_000 }]);
+  const p = { ...HYP, pauseSwitchMin: 15, threshold: 60_000 };
+  assert.equal(whatIf([s], p).switches, 1);
+  assert.equal(whatIf([s], p, { from: T + 1 }).switches, 0);
 });
 
 // R + P = 55 000 juste sous N = 60 000, contexte qui grossit de 10 000 par tour : après une bascule le
