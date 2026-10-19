@@ -168,7 +168,11 @@ Leviers :
 - **Socle −X** : chaque tour simulé a X tokens de contexte en moins.
 - **Seuil N** : quand le contexte simulé d'un tour dépasse N, on simule une bascule juste avant :
   un tour de résumé (lecture du contexte au prix du cache lu + S tokens de sortie), puis le contexte
-  repart de R + P.
+  repart de R + P. Le levier n'agit que si R + P < N : sinon une bascule ne ramènerait pas sous N, et
+  la page le signale sous le curseur. Après une bascule (seuil ou pause) qui laisse le contexte
+  simulé au-dessus de N, le seuil est désarmé : il ne se réarme qu'une fois le contexte simulé
+  repassé sous N, ou après un compactage réel. Sans cela, R + P juste sous N ferait basculer à
+  chaque tour.
 - **Pauses** :
   - *Basculer avant une pause de plus de T min* : la bascule a lieu à cache chaud, à la fin du tour
     qui précède la pause ; le tour qui suit la pause réécrit R + P au lieu de tout le contexte.
@@ -220,11 +224,20 @@ Cet ordre est figé par des tests sur des suites calculées à la main.
 Blocs :
 1. **Résumé** : coût sur la période (tout, 12 semaines, 4 semaines), tendance d'une semaine sur
    l'autre, trois premières recommandations.
+   - Une période de n semaines couvre n semaines ISO entières : du lundi 0 h (heure locale) de la
+     semaine du dernier tour moins n − 1 semaines, jusqu'au dernier tour. Tableaux, indicateurs et
+     what-if utilisent la même fenêtre. Les recommandations gardent leurs 28 jours (§ 7.5).
+   - La tendance compare la dernière semaine complète W à W − 1, semaines calendaires voisines (et
+     non deux lignes voisines du tableau, des semaines sans activité pouvant manquer). La semaine en
+     cours au moment où la page est générée est incomplète, donc exclue. Si W − 1 n'a aucune donnée,
+     pas de tendance. Le texte nomme les deux semaines.
 2. **Historique par semaine** : coût et indicateurs.
 3. **Indicateurs détaillés** : les cinq de § 7.3.
 4. **What-if** : curseurs des leviers et des hypothèses ; boutons « Tous les leviers (valeurs par
    défaut) » et « Habitudes réelles » ; coût réel corrigé contre simulé ; courbes de coût en fonction
-   d'un paramètre (par exemple N), calculées en balayant ses valeurs.
+   d'un paramètre (par exemple N), calculées en balayant ses valeurs. Le balayage tourne par
+   morceaux après l'affichage, sans figer la page (« Calcul en cours… » pendant ce temps) ; un
+   nouveau réglage annule le balayage en cours. La bascule $ / tokens pondérés ne recalcule rien.
 5. **Qualité de lecture** : lignes ignorées par type, sessions lues par une ancienne version,
    modèles sans prix.
 
