@@ -60,6 +60,8 @@ export function whatIf(sessions, params = {}, range = {}) {
   const reprise = p.R + p.P;
 
   for (const s of sessions) {
+    // Rien de cette session ne serait inscrit dans l'intervalle : inutile de la rejouer.
+    if (!s.t.some(inRange) && !s.events.some((e) => inRange(e.t))) continue;
     let delta = 0, ev = 0, prev = null;   // prev : dernier tour principal { t, ctx, sim, simCost, model }
     // Seuil armé : en début de session, après un compactage réel, ou dès que le contexte simulé est
     // revenu sous N. Sans cela, quand R + P est juste sous N, le seuil basculerait à chaque tour.

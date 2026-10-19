@@ -36,3 +36,13 @@ test('formats : k, M, infini, $', () => {
   assert.equal(fmtTok(Infinity), '∞');
   assert.equal(fmtCost({ usd: 12.5, wtok: 0 }, 'usd'), '12,50 $');
 });
+
+test('une session antérieure aux 4 semaines qui précèdent le dernier tour n’influe pas sur les recommandations', () => {
+  // grosse session ancienne, très sensible au socle et à la pause, 5 semaines avant S ; sans compactage
+  // ni /clear, elle ne change pas R et S (mesurés, eux, sur tout l'historique, spec § 7.4)
+  const old = session([
+    { t: T - 35 * 86_400, in: 10, cw: 140_000 },
+    { t: T - 35 * 86_400 + 3_600, in: 10, cw: 149_000 },
+  ]);
+  assert.deepEqual(recommend([old, S]), recommend([S]));
+});

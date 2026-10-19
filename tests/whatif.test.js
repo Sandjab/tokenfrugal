@@ -218,3 +218,24 @@ test('seuil réarmé par un compactage réel : une nouvelle bascule redevient po
   const s = session(turns, { events: [{ t: T + 900, kind: 'compact', trigger: 'auto', pre: 120_000, post: 8_000 }] });
   assert.equal(whatIf([s], { R: 50_000, P: 5_000, S: 1_000, threshold: 60_000 }).switches, 2);
 });
+
+// Référence indépendante du saut : chaque session est rejouée en entière, donc une semaine entièrement
+// dans l'intervalle a le même coût qu'avec un rejeu sans intervalle. Les sessions démarrent le soir et
+// passent minuit : certaines chevauchent les bornes (lundis 00:00, changement d'heure compris).
+test('intervalle : sauter les sessions hors de l’intervalle ne change aucun chiffre', () => {
+  const all = randomSessions(30, 11);   // une session par jour, du 15 oct. au 13 nov. 2026
+  const local = (...a) => new Date(...a).getTime() / 1000;
+  const range = { from: local(2026, 9, 19), to: local(2026, 10, 2) };   // semaines 43 et 44
+  const p = { R: 30_000, P: 5_000, S: 2_000, socleCut: 5_000, threshold: 120_000, pauseSwitchMin: 20 };
+  const r = whatIf(all, p, range), full = whatIf(all, p);
+  assert.deepEqual(r.byWeek, full.byWeek.filter((w) => w.week === '2026-W43' || w.week === '2026-W44'));
+  assert.ok(near(r.sim.wtok, r.byWeek.reduce((a, w) => a + w.sim.wtok, 0)));
+  const inside = all.filter((s) => s.t.some((t) => t >= range.from && t < range.to) || s.events.some((e) => e.t >= range.from && e.t < range.to));
+  assert.ok(inside.length > 0 && inside.length < all.length);
+  assert.deepEqual(r, whatIf(inside, p, range));   // les sessions lointaines n'y changent rien
+});
+
+test('intervalle : une session dont seul un compactage tombe dedans est rejouée (son résumé compte)', () => {
+  const s = session([{ t: T, in: 10, cw: 100_000 }], { events: [{ t: T + 100, kind: 'compact', trigger: 'manual', pre: 100_000, post: 8_000 }] });
+  assert.ok(near(whatIf([s], NEUTRAL, { from: T + 50 }).real.wtok, 10_000 + 40_000));
+});
