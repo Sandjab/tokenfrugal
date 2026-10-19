@@ -131,3 +131,61 @@ test('socle appliqué aussi au résumé simulé d’un compactage réel', () => 
 test('paramètre undefined : le défaut s’applique', () => {
   assert.equal(whatIf([A], { R: undefined, P: 0, S: 1_000, threshold: 60_000 }).switches, 1);
 });
+
+// Session avec pause de 20 min avant le dernier tour, qui doit alors tout réécrire en cache.
+const PAUSE = session([
+  { t: T, in: 10, cw: 40_000 },                    // 50 010
+  { t: T + 60, in: 10, cr: 40_000, cw: 30_000 },   // 41 510
+  { t: T + 1260, in: 10, cw: 80_000 },             // 100 010 (reconstruction)
+]);
+const HYP = { R: 20_000, P: 0, S: 1_000 };
+
+test('seuil : une bascule coûte un résumé et une réécriture avant de rapporter', () => {
+  const r = whatIf([A], { ...HYP, threshold: 60_000 });
+  // t1 dépasse 60 000 : résumé (40 010 lus + 1 000 de sortie = 9 001), contexte ramené à 50 000,
+  // tout réécrit (62 497,5) ; t2 : 60 000, dont 49 990 lus (17 509)
+  assert.equal(r.switches, 1);
+  assert.ok(near(r.sim.wtok, 50_010 + 9_001 + 62_497.5 + 17_509));
+  assert.ok(r.sim.wtok > r.real.wtok);   // session trop courte pour amortir la bascule
+});
+
+// Contexte réel de 30 000 à 820 000 : chaque bascule coûte ≈ 150 000 de plus et rapporte ≈ 72 000 × son rang,
+// donc le cumul ne devient favorable qu'après la 3e. À 40 tours simulé − réel = +196 927 (perte) ; à 80, −990 670,5.
+test('seuil : sur une longue session qui grossit, la bascule rapporte', () => {
+  const turns = [];
+  for (let i = 0, ctx = 20_000; i < 80; i++, ctx += 10_000) turns.push({ t: T + i * 60, in: 10, cr: ctx, cw: 10_000 });
+  const r = whatIf([session(turns)], { R: 50_000, P: 20_000, S: 15_000, threshold: 150_000 });
+  assert.ok(r.switches >= 1);
+  assert.ok(r.sim.wtok < r.real.wtok);
+});
+
+test('seuil : pas de bascule tant que le contexte n’excède pas R + P (pas de boucle)', () => {
+  const r = whatIf([A], { R: 50_000, P: 0, S: 1_000, threshold: 60_000 });
+  assert.equal(r.switches, 1);   // t1 : 40 010 ≤ R, pas de bascule ; t2 : 70 010 > R, une seule
+});
+
+test('pause : basculer avant une pause de plus de T min évite de tout réécrire', () => {
+  const r = whatIf([PAUSE], { ...HYP, pauseSwitchMin: 15 });
+  // bascule à la fin de t1 : 70 010 lus + 1 000 de sortie = 12 001 ; t2 ne réécrit que 30 000 (37 497,5)
+  assert.equal(r.switches, 1);
+  assert.ok(near(r.sim.wtok, 50_010 + 41_510 + 12_001 + 37_497.5));
+  assert.ok(near(r.real.wtok - r.sim.wtok, 50_511.5));
+});
+
+test('pause plus courte que T : aucune bascule, simulé = réel', () => {
+  const r = whatIf([PAUSE], { ...HYP, pauseSwitchMin: 30 });
+  assert.equal(r.switches, 0);
+  assert.equal(r.sim.wtok, r.real.wtok);
+});
+
+test('cache 1 h : écritures plus chères, mais une pause de 20 min ne casse plus le cache', () => {
+  const r = whatIf([PAUSE], { cache1h: true });
+  // t0 : 40 000 écrits ×2 ; t1 : 40 000 lus + 30 000 écrits ×2 ; t2 : 70 010 relus + 9 990 écrits ×2
+  assert.ok(near(r.sim.wtok, 80_010 + 64_010 + 26_991));
+  assert.ok(r.sim.wtok < r.real.wtok);
+});
+
+test('pause et seuil sur le même tour : une seule bascule, la pause passe d’abord', () => {
+  const r = whatIf([PAUSE], { ...HYP, pauseSwitchMin: 15, threshold: 60_000 });
+  assert.equal(r.switches, 2);   // seuil sur t1, pause avant t2, jamais deux sur le même tour
+});
