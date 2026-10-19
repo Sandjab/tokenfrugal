@@ -1,0 +1,48 @@
+// tests/helpers/logs.js — fabrique des journaux Claude Code minimaux (format relevé le 19 oct. 2026).
+import { mkdirSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+export const T0 = Date.UTC(2026, 9, 12, 9) / 1000;   // lundi 12 oct. 2026, 9 h UTC
+export const iso = (sec) => new Date(sec * 1000).toISOString();
+
+export function assistant({ t, id = `msg_${t}`, req = `req_${t}`, model = 'claude-opus-4-6', input = 0, output = 0, cr = 0, cw = 0, cw1h = 0, text = 'ok' }) {
+  return JSON.stringify({
+    type: 'assistant', timestamp: iso(t), requestId: req,
+    message: {
+      id, model, role: 'assistant', content: [{ type: 'text', text }],
+      usage: {
+        input_tokens: input, output_tokens: output, cache_read_input_tokens: cr, cache_creation_input_tokens: cw,
+        cache_creation: { ephemeral_1h_input_tokens: cw1h, ephemeral_5m_input_tokens: cw - cw1h },
+      },
+    },
+  });
+}
+export const user = ({ t, text = 'bonjour', cwd = '/tmp/projet' }) =>
+  JSON.stringify({ type: 'user', timestamp: iso(t), cwd, message: { role: 'user', content: text } });
+export const toolResult = ({ t, content }) =>
+  JSON.stringify({ type: 'user', timestamp: iso(t), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content }] } });
+export const compact = ({ t, trigger = 'auto', pre, post }) =>
+  JSON.stringify({ type: 'system', subtype: 'compact_boundary', timestamp: iso(t), compactMetadata: { trigger, preTokens: pre, postTokens: post, durationMs: 80_000 } });
+export const clearLines = (t) => [
+  JSON.stringify({ type: 'user', isMeta: true, timestamp: iso(t), message: { role: 'user', content: '<local-command-caveat>Caveat: …</local-command-caveat>' } }),
+  JSON.stringify({ type: 'user', timestamp: iso(t), message: { role: 'user', content: '<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>' } }),
+  JSON.stringify({ type: 'system', subtype: 'local_command', timestamp: iso(t), content: '' }),
+];
+
+// layout : { <projet>: { <session>: { main: [lignes], subs: { 'chemin/agent-x.jsonl': [lignes] } } } }
+export function writeProjects(layout, root = mkdtempSync(path.join(tmpdir(), 'tf-projects-'))) {
+  for (const [slug, sessions] of Object.entries(layout)) {
+    for (const [id, { main = [], subs = {} }] of Object.entries(sessions)) {
+      mkdirSync(path.join(root, slug), { recursive: true });
+      writeFileSync(path.join(root, slug, `${id}.jsonl`), main.join('\n') + '\n');
+      for (const [name, lines] of Object.entries(subs)) {
+        const file = path.join(root, slug, id, 'subagents', name);
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(file, lines.join('\n') + '\n');
+      }
+    }
+  }
+  return root;
+}
+export const tmpStore = () => mkdtempSync(path.join(tmpdir(), 'tf-store-'));
