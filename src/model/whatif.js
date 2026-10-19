@@ -4,7 +4,7 @@ import { ctxOf, median, isoWeek, zero, add, isRebuild, mainIndexes } from './uti
 
 // Leviers coupés : la simulation reproduit le réel corrigé.
 export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false };
-// Valeurs réalistes de l'optimum (spec § 7.5) ; P est une supposition.
+// Valeurs par défaut des leviers, préréglage « tous les leviers » (spec § 7.5) ; P est une supposition.
 // pauseSwitchMin : valeur pour un cache de 5 min, et repli ; measuredDefaults la remplace selon le TTL mesuré.
 export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000 };
 // T quand les écritures en cache sont surtout en TTL 1 h : une pause de moins d'1 h ne casse pas le cache.

@@ -49,7 +49,7 @@ export const T = {
   },
   whatif: 'Et si…',
   whatifIntro: 'Chaque session est rejouée tour par tour avec les leviers choisis. Les chiffres restent des estimations : changer une habitude change aussi la suite d’une session.',
-  optimum: 'Optimum atteignable',
+  optimum: 'Tous les leviers (valeurs par défaut)',
   neutral: 'Habitudes réelles',
   enable: 'Activer',
   lever: {

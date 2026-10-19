@@ -132,3 +132,8 @@ test('T du levier pause déduit du TTL du cache mesuré, avec sa note', async ({
   await page.locator('#wi-optimum').click();   // le préréglage revient au T mesuré
   await expect(page.locator('#v-pauseSwitchMin')).toHaveText('60 min');
 });
+
+test('préréglage nommé pour ce qu’il est : tous les leviers aux valeurs par défaut, pas un optimum', async ({ page }) => {
+  await page.goto(fullUrl);
+  await expect(page.locator('#wi-optimum')).toHaveText('Tous les leviers (valeurs par défaut)');
+});

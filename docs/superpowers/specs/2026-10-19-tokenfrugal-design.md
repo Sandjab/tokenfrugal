@@ -172,6 +172,11 @@ Leviers :
 - **Pauses** :
   - *Basculer avant une pause de plus de T min* : la bascule a lieu à cache chaud, à la fin du tour
     qui précède la pause ; le tour qui suit la pause réécrit R + P au lieu de tout le contexte.
+    T par défaut se déduit du TTL des écritures en cache : une pause de moins d'une heure ne casse pas
+    un cache 1 h, basculer avant elle ne rapporterait rien. Part 1 h = Σ min(cw1h, cw) / Σ cw sur les
+    tours principaux des 4 semaines qui précèdent le dernier tour relevé ([dernier − 28 j,
+    dernier + 1)) ; T = 60 min si cette part atteint 50 %, sinon 15 min (aucune écriture : 15 min).
+    La page affiche la valeur retenue et sa raison à côté du curseur.
   - *Cache 1 h* : toutes les écritures en cache coûtent 2 × l'entrée ; une pause de 5 à 60 min ne
     provoque plus de reconstruction (le tour lit le contexte du tour précédent et n'écrit que le
     nouveau).
@@ -194,17 +199,18 @@ Ordre des opérations pour chaque tour : (1) levier pause, s'il y a une pause av
 (2) levier seuil, sur le contexte simulé qui en résulte ; (3) socle −X, appliqué au coût du tour.
 Cet ordre est figé par des tests sur des suites calculées à la main.
 
-### 7.5 Optimum atteignable et recommandations
+### 7.5 Tous les leviers et recommandations
 
-- **Optimum atteignable** : les trois leviers ensemble, à leurs valeurs par défaut réalistes :
-  X = 10 000, N = 150 000, T = 15 min, cache 1 h coupé. Ces valeurs sont proposées et seront revues
+- **Tous les leviers (valeurs par défaut)** : préréglage du what-if, les trois leviers ensemble à
+  leurs valeurs par défaut : X = 10 000, N = 150 000, T mesuré (§ 7.4), cache 1 h coupé. Ce n'est pas
+  un optimiseur : aucune recherche des meilleures valeurs. Ces valeurs sont proposées et seront revues
   après le contrôle sur le corpus réel (§ 10).
 - **Recommandations** : les leviers socle, seuil et pause sont rejoués chacun seul, aux valeurs par
-  défaut, sur les 4 semaines qui précèdent le dernier tour relevé ; classement par gain, leviers sans
+  défaut (T mesuré, § 7.4), sur les 4 semaines qui précèdent le dernier tour relevé ; classement par gain, leviers sans
   gain omis. Le cache 1 h reste un interrupteur du what-if, sans recommandation : rien ne garantit
   qu'on puisse l'activer dans Claude Code. Une phrase d'action fixe par levier, avec les chiffres calculés
   (ex. « Basculer avant les pauses de plus de 15 min : −X $ par semaine »). Les gains seuls se
-  recoupent ; le total combiné est celui de l'optimum.
+  recoupent ; le total combiné est celui du préréglage « tous les leviers ».
 
 ## 8. Page (`src/report`)
 
@@ -216,8 +222,9 @@ Blocs :
    l'autre, trois premières recommandations.
 2. **Historique par semaine** : coût et indicateurs.
 3. **Indicateurs détaillés** : les cinq de § 7.3.
-4. **What-if** : curseurs des leviers et des hypothèses ; coût réel corrigé contre simulé ; courbes
-   de coût en fonction d'un paramètre (par exemple N), calculées en balayant ses valeurs.
+4. **What-if** : curseurs des leviers et des hypothèses ; boutons « Tous les leviers (valeurs par
+   défaut) » et « Habitudes réelles » ; coût réel corrigé contre simulé ; courbes de coût en fonction
+   d'un paramètre (par exemple N), calculées en balayant ses valeurs.
 5. **Qualité de lecture** : lignes ignorées par type, sessions lues par une ancienne version,
    modèles sans prix.
 
