@@ -6,9 +6,9 @@ compactages, reprises après `/clear` — puis dit quoi changer dans sa façon d
 
 ## Statut
 
-Rien n'est construit. Le dépôt contient le cadrage, pas de code.
-Première session : lire `docs/brief.md`, puis `private/` s'il existe (chiffres réels, jamais commités).
-Ensuite : brainstorming → spec dans `docs/superpowers/specs/` → plan dans `docs/superpowers/plans/` → TDD.
+v1 construite : `node bin/tokenfrugal.mjs report` relève `~/.claude/projects` dans `~/.tokenfrugal/` et
+écrit `report.html`. Spec : `docs/superpowers/specs/2026-10-19-tokenfrugal-design.md`, plan :
+`docs/superpowers/plans/2026-10-19-tokenfrugal-v1.md`. Chiffres réels de contrôle dans `private/`.
 
 ## Périmètre (décidé le 19 oct. 2026)
 

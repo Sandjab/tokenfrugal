@@ -4,4 +4,6 @@ Find where your Claude Code tokens go — context repaid on every turn, cache re
 compactions, restarts after `/clear` — and what to change. Reads your local session logs; nothing
 leaves your machine.
 
-Status: not built yet. See [docs/brief.md](docs/brief.md) (in French) for the starting brief.
+Status: v1 works locally. Run `node bin/tokenfrugal.mjs report --open` (Node ≥ 22, after `npm install`).
+Data is stored in `~/.tokenfrugal/`. See [docs/brief.md](docs/brief.md) and the
+[v1 spec](docs/superpowers/specs/2026-10-19-tokenfrugal-design.md) (in French).
