@@ -71,7 +71,7 @@ export const T = {
   privacy: 'Ce fichier contient le détail de vos tours (nombres et heures), sans texte ni chemin. Il reste sur votre machine.',
   cli: {
     noProjects: (d) => `Dossier des journaux introuvable : ${d}`,
-    collected: (r) => `${r.listed} sessions trouvées, ${r.read} lues, ${r.unchanged} inchangées, ${r.kept} conservées après purge (${(r.ms / 1000).toFixed(1)} s)`,
+    collected: (r) => `${r.listed} sessions trouvées, ${r.read} lues, ${r.ignored} ligne${r.ignored > 1 ? 's' : ''} ignorée${r.ignored > 1 ? 's' : ''}, ${r.unchanged} inchangées, ${r.kept} conservées après purge (${(r.ms / 1000).toFixed(1)} s)`,
     recommendations: 'Quoi changer en premier :',
     noRecommendation: 'Aucun levier ne fait gagner sur les 4 dernières semaines.',
     reportWritten: (f) => `Page écrite : ${f}`,

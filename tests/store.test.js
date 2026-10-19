@@ -93,3 +93,15 @@ test('ni nom de session ni nom de projet en clair dans le stockage', async () =>
     assert.ok(!body.includes('session-oct') && !body.includes('session-sept'), f);
   }
 });
+
+test('lignes ignorées : total sur les sessions lues pendant ce relevé (spec § 4, § 5.4)', async () => {
+  const projects = writeProjects({
+    p: {
+      a: { main: [assistant({ t: T0, input: 1 }), '{pas du json', JSON.stringify({ type: 'nouveau-type' })] },
+      b: { main: [assistant({ t: T0 + 60, input: 1 }), JSON.stringify({ type: 'nouveau-type' })] },
+    },
+  });
+  const store = tmpStore();
+  assert.equal((await collect({ projectsDir: projects, storeDir: store })).ignored, 3);
+  assert.equal((await collect({ projectsDir: projects, storeDir: store })).ignored, 0);   // rien relu
+});

@@ -21,11 +21,11 @@ test('commande inconnue : usage, code 2', () => {
 });
 
 test('report : relève, écrit la page, affiche recommandations et chemin', () => {
-  const projects = writeProjects({ p: { s: { main: [assistant({ t: T0, input: 10, cw: 40_000 }), assistant({ t: T0 + 60, input: 10, cr: 40_000, cw: 5_000 })] } } });
+  const projects = writeProjects({ p: { s: { main: [assistant({ t: T0, input: 10, cw: 40_000 }), '{pas du json', assistant({ t: T0 + 60, input: 10, cr: 40_000, cw: 5_000 })] } } });
   const store = tmpStore();
   const r = run('report', '--projects', projects, '--store', store);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /1 sessions trouvées, 1 lues/);
+  assert.match(r.stdout, /1 sessions trouvées, 1 lues, 1 ligne ignorée,/);
   assert.match(r.stdout, /Quoi changer en premier/);
   assert.match(r.stdout, /Page écrite/);
   assert.ok(existsSync(path.join(store, 'report.html')));

@@ -38,7 +38,7 @@ export async function collect({ projectsDir, storeDir, onProgress }) {
   };
   const entries = await listSessions(projectsDir);
   const listed = new Set();
-  let read = 0, unchanged = 0;
+  let read = 0, unchanged = 0, ignored = 0;
   for (const [i, e] of entries.entries()) {
     const key = hash(`${e.slug}/${e.id}`);
     listed.add(key);
@@ -49,7 +49,11 @@ export async function collect({ projectsDir, storeDir, onProgress }) {
     read++;
     if (prev && prev.month) { const old = await month(prev.month); delete old.data.sessions[key]; old.dirty = true; }
     let m = null;
-    if (s) { m = monthOf(s.start); const cur = await month(m); cur.data.sessions[key] = s; cur.dirty = true; }
+    if (s) {
+      for (const n of Object.values(s.ignored)) ignored += n;
+      m = monthOf(s.start);
+      const cur = await month(m); cur.data.sessions[key] = s; cur.dirty = true;
+    }
     index.sessions[key] = { stamp, analyzer: ANALYZER_VERSION, month: m };
     if (onProgress && (i + 1) % 50 === 0) onProgress({ done: i + 1, total: entries.length });
   }
@@ -57,7 +61,7 @@ export async function collect({ projectsDir, storeDir, onProgress }) {
   // L'index en dernier : une coupure avant ne fait que relire ces sessions au relevé suivant.
   await writeJsonAtomic(indexFile, index);
   const kept = Object.keys(index.sessions).filter((k) => !listed.has(k)).length;
-  return { listed: entries.length, read, unchanged, kept, ms: Date.now() - t0 };
+  return { listed: entries.length, read, unchanged, kept, ignored, ms: Date.now() - t0 };
 }
 
 export async function loadSessions(storeDir) {
