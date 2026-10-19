@@ -2,6 +2,7 @@
 // Cache lu = 0,1 × entrée sauf mention ; cache écrit = 1,25 × entrée (5 min), 2 × entrée (1 h, dans cost.js).
 // Vérifiée le 2026-10-19 contre le skill claude-api (table du 2026-10-06) : entrée et sortie de toutes
 // les lignes Fable/Mythos/Opus 4.6+/Sonnet 4.6+/Haiku identiques, cache lu confirmé pour Fable 5.1,
+// Opus 5.5 et Sonnet 5.5.
 // Opus 4 / 4.1, Sonnet 4 / 4.5 et Haiku 3.5 absents du skill : grille publique, non revérifiée.
 // Haiku 5.5 : prix valable jusqu'à 100 k tokens de prompt.
 export const PRICES = [
