@@ -106,7 +106,7 @@ stockage et s'affichent dans le CLI et la page.
 ## 6. Stockage (`src/store`)
 
 ```
-<store>/index.json        { schema, files: { <hash du chemin relatif>: { size, mtimeMs, session } } }
+<store>/index.json        { schema, sessions: { <hash de session>: { stamp, analyzer, month } } }
 <store>/turns-AAAA-MM.json { schema, sessions: { <hash de session>: Session } }
 ```
 
@@ -116,6 +116,7 @@ cw1h: [], sub: [], events: [], ignored: { <type>: n } }`, en colonnes ; `m[i]` i
 
 - Les hachages (SHA-256 tronqué) remplacent chemins et identifiants : le stockage ne contient
   aucun chemin.
+- `stamp` = hachage des chemins relatifs, tailles et dates des fichiers de la session.
 - Session nouvelle, ou dont un fichier a changé de taille ou de date : relue entièrement, remplacée.
 - Fichier principal disparu (purge) : la session stockée n'est pas touchée.
 - `analyzer` = version de l'analyseur. Si elle change, les sessions dont les fichiers existent encore
@@ -198,8 +199,10 @@ Cet ordre est figé par des tests sur des suites calculées à la main.
 - **Optimum atteignable** : les trois leviers ensemble, à leurs valeurs par défaut réalistes :
   X = 10 000, N = 150 000, T = 15 min, cache 1 h coupé. Ces valeurs sont proposées et seront revues
   après le contrôle sur le corpus réel (§ 10).
-- **Recommandations** : chaque levier est rejoué seul, aux valeurs par défaut, sur les 4 dernières
-  semaines ; classement par gain. Une phrase d'action fixe par levier, avec les chiffres calculés
+- **Recommandations** : les leviers socle, seuil et pause sont rejoués chacun seul, aux valeurs par
+  défaut, sur les 4 semaines qui précèdent le dernier tour relevé ; classement par gain, leviers sans
+  gain omis. Le cache 1 h reste un interrupteur du what-if, sans recommandation : rien ne garantit
+  qu'on puisse l'activer dans Claude Code. Une phrase d'action fixe par levier, avec les chiffres calculés
   (ex. « Basculer avant les pauses de plus de 15 min : −X $ par semaine »). Les gains seuls se
   recoupent ; le total combiné est celui de l'optimum.
 
