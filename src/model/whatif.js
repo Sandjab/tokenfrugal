@@ -40,7 +40,9 @@ export function summaryCost(readTokens, outTokens, model) {
 // Rejoue chaque session principale tour par tour, tous leviers ensemble (une seule passe : pas de
 // gain compté deux fois). delta = tokens que la simulation a retirés du contexte réel.
 export function whatIf(sessions, params = {}, range = {}) {
-  const p = { ...NEUTRAL, ...FALLBACK, P: DEFAULTS.P, ...params };
+  // Une valeur undefined (curseur absent) ne doit pas écraser le défaut.
+  const given = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined));
+  const p = { ...NEUTRAL, ...FALLBACK, P: DEFAULTS.P, ...given };
   const from = range.from ?? -Infinity, to = range.to ?? Infinity;
   const res = { measured: zero(), real: zero(), sim: zero(), switches: 0, unpriced: 0 };
   const weeks = new Map();
@@ -59,10 +61,24 @@ export function whatIf(sessions, params = {}, range = {}) {
 
   for (const s of sessions) {
     let delta = 0, ev = 0, prev = null;   // prev : dernier tour principal { t, ctx, sim, simCost, model }
+    // Modèle du résumé d'un compactage : celui du dernier tour principal tarifé avant lui, à défaut
+    // celui du premier tour principal tarifé de la session.
+    let lastModel = null;
+    const firstModel = s.t.map((_, i) => i).filter((i) => !s.sub[i] && costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), s.models[s.m[i]]))
+      .map((i) => s.models[s.m[i]])[0] ?? null;
+    const bookCompaction = (e) => {
+      const m = lastModel ?? firstModel;
+      if (m) book(e.t, summaryCost(e.pre, e.post, m), summaryCost(Math.max(0, e.pre - delta - p.socleCut), e.post, m), false);
+      delta = 0;
+    };
     for (let i = 0; i < s.t.length; i++) {
       const t = s.t[i], model = s.models[s.m[i]];
       const real = costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), model);
-      if (!real) { if (inRange(t)) res.unpriced++; continue; }
+      if (!real) {
+        if (inRange(t)) res.unpriced++;
+        if (!s.sub[i] && prev) prev.t = t;   // un tour inconnu n'est pas une pause
+        continue;
+      }
       if (s.sub[i]) { book(t, real, real, true); continue; }
 
       // Compactages réels avant ce tour : résumé estimé des deux côtés, puis la simulation repart
@@ -70,8 +86,7 @@ export function whatIf(sessions, params = {}, range = {}) {
       let compacted = false;
       while (ev < s.events.length && s.events[ev].t <= t) {
         const e = s.events[ev++];
-        if (prev) book(e.t, summaryCost(e.pre, e.post, prev.model), summaryCost(Math.max(0, e.pre - delta), e.post, prev.model), false);
-        delta = 0;
+        bookCompaction(e);
         compacted = true;
       }
       if (compacted) prev = null;
@@ -89,7 +104,7 @@ export function whatIf(sessions, params = {}, range = {}) {
       if (prev && gap > p.pauseSwitchMin * 60 && prev.sim > reprise) doSwitch(prev.t);
       let sim = Math.max(ctx - delta, s.in[i]);
       // (2) seuil : basculer juste avant le tour qui le dépasse
-      if (!switched && prev && sim > p.threshold && prev.sim > reprise) {
+      if (!switched && prev && sim > p.threshold && reprise < p.threshold && prev.sim > reprise) {
         doSwitch(t);
         sim = Math.max(ctx - delta, s.in[i]);
       }
@@ -113,7 +128,9 @@ export function whatIf(sessions, params = {}, range = {}) {
       const simC = costOf(partsOf(s.in[i], s.out[i], cr, cw, p.cache1h ? cw : s.cw1h[i]), model);
       book(t, real, simC, true);
       prev = { t, ctx, sim, simCost, model };
+      lastModel = model;
     }
+    while (ev < s.events.length) bookCompaction(s.events[ev++]);   // compactages après le dernier tour
   }
   return { ...res, byWeek: [...weeks.values()].sort((a, b) => (a.week < b.week ? -1 : 1)) };
 }

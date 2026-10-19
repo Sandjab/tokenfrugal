@@ -96,3 +96,38 @@ test('aucune session : tout à zéro', () => {
   const r = whatIf([], NEUTRAL);
   assert.deepEqual([r.real.usd, r.sim.usd, r.byWeek.length], [0, 0, 0]);
 });
+
+test('seuil ≤ R + P : aucune bascule (elle ne ramènerait pas sous le seuil)', () => {
+  const r = whatIf([A], { R: 50_000, P: 20_000, S: 1_000, threshold: 60_000 });
+  assert.equal(r.switches, 0);
+  assert.equal(r.sim.wtok, r.real.wtok);
+});
+
+test('compactage après le dernier tour : son résumé est compté', () => {
+  const s = session([{ t: T, in: 10, cw: 100_000 }], { events: [{ t: T + 100, kind: 'compact', trigger: 'manual', pre: 100_000, post: 8_000 }] });
+  const r = whatIf([s], NEUTRAL);
+  assert.ok(near(r.real.wtok, 125_010 + 50_000));
+  assert.equal(r.sim.wtok, r.real.wtok);
+});
+
+test('compactage avant le premier tour : résumé compté, au modèle du premier tour', () => {
+  const s = session([{ t: T, in: 10, cw: 20_000 }], { events: [{ t: T - 10, kind: 'compact', trigger: 'auto', pre: 30_000, post: 2_000 }] });
+  assert.ok(near(whatIf([s], NEUTRAL).real.wtok, 25_010 + 3_000 + 10_000));
+});
+
+test('tour inconnu entre deux tours : deux pauses de 10 min ne font pas une pause de 20', () => {
+  const s = session([{ t: T, in: 10, cw: 40_000 }, { t: T + 600 }, { t: T + 1200, in: 10, cw: 80_000 }]);
+  s.models.push('gpt-x'); s.m[1] = 1;
+  assert.equal(whatIf([s], { R: 20_000, P: 0, S: 1_000, pauseSwitchMin: 15 }).switches, 0);
+});
+
+test('socle appliqué aussi au résumé simulé d’un compactage réel', () => {
+  const s = session([{ t: T, in: 10, cw: 100_000 }, { t: T + 200, in: 10, cw: 20_000 }],
+    { events: [{ t: T + 100, kind: 'compact', trigger: 'auto', pre: 100_000, post: 8_000 }] });
+  const r = whatIf([s], { socleCut: 5_000 });
+  assert.ok(near(r.real.wtok - r.sim.wtok, 6_250 + 500 + 6_250));
+});
+
+test('paramètre undefined : le défaut s’applique', () => {
+  assert.equal(whatIf([A], { R: undefined, P: 0, S: 1_000, threshold: 60_000 }).switches, 1);
+});
