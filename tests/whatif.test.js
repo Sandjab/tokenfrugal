@@ -189,3 +189,22 @@ test('pause et seuil sur le même tour : une seule bascule, la pause passe d’a
   const r = whatIf([PAUSE], { ...HYP, pauseSwitchMin: 15, threshold: 60_000 });
   assert.equal(r.switches, 2);   // seuil sur t1, pause avant t2, jamais deux sur le même tour
 });
+
+// R + P = 55 000 juste sous N = 60 000, contexte qui grossit de 10 000 par tour : après une bascule le
+// contexte simulé (65 000) repasse aussitôt au-dessus de N. Sans réarmement, le seuil basculerait à
+// chaque tour (et coûterait un résumé et une réécriture à chaque fois) ; il attend que le contexte
+// simulé soit revenu sous N.
+test('seuil juste au-dessus de R + P : une seule bascule, pas une par tour (réarmement)', () => {
+  const turns = [];
+  for (let i = 0, ctx = 20_000; i < 20; i++, ctx += 10_000) turns.push({ t: T + i * 60, in: 10, cr: ctx, cw: 10_000 });
+  const r = whatIf([session(turns)], { R: 50_000, P: 5_000, S: 1_000, threshold: 60_000 });
+  assert.equal(r.switches, 1);
+});
+
+test('seuil réarmé par un compactage réel : une nouvelle bascule redevient possible', () => {
+  const turns = [];
+  for (let i = 0, ctx = 20_000; i < 10; i++, ctx += 10_000) turns.push({ t: T + i * 60, in: 10, cr: ctx, cw: 10_000 });
+  for (let i = 0, ctx = 20_000; i < 10; i++, ctx += 10_000) turns.push({ t: T + 1_000 + i * 60, in: 10, cr: ctx, cw: 10_000 });
+  const s = session(turns, { events: [{ t: T + 900, kind: 'compact', trigger: 'auto', pre: 120_000, post: 8_000 }] });
+  assert.equal(whatIf([s], { R: 50_000, P: 5_000, S: 1_000, threshold: 60_000 }).switches, 2);
+});

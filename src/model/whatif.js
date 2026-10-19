@@ -61,6 +61,9 @@ export function whatIf(sessions, params = {}, range = {}) {
 
   for (const s of sessions) {
     let delta = 0, ev = 0, prev = null;   // prev : dernier tour principal { t, ctx, sim, simCost, model }
+    // Seuil armé : en début de session, après un compactage réel, ou dès que le contexte simulé est
+    // revenu sous N. Sans cela, quand R + P est juste sous N, le seuil basculerait à chaque tour.
+    let armed = true;
     // Modèle du résumé d'un compactage : celui du dernier tour principal tarifé avant lui, à défaut
     // celui du premier tour principal tarifé de la session.
     let lastModel = null;
@@ -89,7 +92,7 @@ export function whatIf(sessions, params = {}, range = {}) {
         bookCompaction(e);
         compacted = true;
       }
-      if (compacted) prev = null;
+      if (compacted) { prev = null; armed = true; }
 
       const ctx = ctxOf(s, i), gap = prev ? t - prev.t : 0;
       let switched = false;
@@ -104,10 +107,12 @@ export function whatIf(sessions, params = {}, range = {}) {
       if (prev && gap > p.pauseSwitchMin * 60 && prev.sim > reprise) doSwitch(prev.t);
       let sim = Math.max(ctx - delta, s.in[i]);
       // (2) seuil : basculer juste avant le tour qui le dépasse
-      if (!switched && prev && sim > p.threshold && reprise < p.threshold && prev.sim > reprise) {
+      if (!switched && armed && prev && sim > p.threshold && reprise < p.threshold && prev.sim > reprise) {
         doSwitch(t);
         sim = Math.max(ctx - delta, s.in[i]);
       }
+      if (sim <= p.threshold) armed = true;
+      else if (switched) armed = false;
       // (3) socle : retiré du contexte payé par ce tour
       const simCost = Math.max(sim - p.socleCut, s.in[i]);
 
