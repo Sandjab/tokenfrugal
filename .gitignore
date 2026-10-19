@@ -1,0 +1,5 @@
+node_modules/
+private/
+test-results/
+dist/
+.DS_Store
