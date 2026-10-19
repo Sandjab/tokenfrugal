@@ -25,12 +25,12 @@ test.beforeAll(async () => {
   const empty = path.join(tmpStore(), 'report.html');
   writeFileSync(empty, buildReport({ analyzer: ANALYZER_VERSION, sessions: [] }));
   // Une session le mercredi de chacune des 6 semaines qui précèdent celle du relevé (2026-W37 à W42) ;
-  // le relevé a lieu le mercredi de 2026-W43.
+  // le relevé a lieu le mercredi de 2026-W43. Écritures en cache 1 h.
   const DAY = 86_400, wed = T0 + 2 * DAY;
   const sixWeeks = {};
   for (let k = 0; k < 6; k++) {
     const t = wed - k * 7 * DAY;
-    sixWeeks[`w${k}`] = { main: [user({ t }), assistant({ t: t + 5, input: 10, cw: 30_000 + k * 1_000 }), assistant({ t: t + 65, input: 10, cr: 30_000, cw: 2_000 })] };
+    sixWeeks[`w${k}`] = { main: [user({ t }), assistant({ t: t + 5, input: 10, cw: 30_000 + k * 1_000, cw1h: 30_000 + k * 1_000 }), assistant({ t: t + 65, input: 10, cr: 30_000, cw: 2_000, cw1h: 2_000 })] };
   }
   const store6 = tmpStore();
   await collect({ projectsDir: writeProjects({ demo: sixWeeks }), storeDir: store6 });
@@ -119,4 +119,16 @@ test('seuil ≤ R + P : une note dit que le levier ne peut pas agir', async ({ p
   await expect(note).toContainText('R + P');
   await page.locator('#on-threshold').uncheck();
   await expect(note).toBeEmpty();               // levier coupé : rien à signaler
+});
+
+test('T du levier pause déduit du TTL du cache mesuré, avec sa note', async ({ page }) => {
+  await page.goto(fullUrl);   // écritures en cache 5 min
+  await expect(page.locator('#v-pauseSwitchMin')).toHaveText('15 min');
+  await expect(page.locator('#note-pauseSwitchMin')).toHaveText('15 min : cache de 5 min');
+  await page.goto(weeksUrl);  // écritures en cache 1 h
+  await expect(page.locator('#v-pauseSwitchMin')).toHaveText('60 min');
+  await expect(page.locator('#note-pauseSwitchMin')).toHaveText(/^60 min : vos écritures en cache sont en TTL 1 h \(100 %\)$/);
+  await page.locator('#sl-pauseSwitchMin').evaluate((el) => { el.value = '30'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('#wi-optimum').click();   // le préréglage revient au T mesuré
+  await expect(page.locator('#v-pauseSwitchMin')).toHaveText('60 min');
 });

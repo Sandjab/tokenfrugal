@@ -3,7 +3,7 @@
 import { priceFor } from '../model/pricing.js';
 import { isoWeek, median, weekStart } from '../model/util.js';
 import { weekly, mergeWeeks, trendWeeks } from '../model/metrics.js';
-import { whatIf, measuredDefaults, DEFAULTS } from '../model/whatif.js';
+import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
 import { T, fmtCost, fmtTok, fmtPct, fmtShare, recommendationText } from './strings.js';
 
@@ -13,7 +13,7 @@ const WEEKS = weekly(SESSIONS);
 const HYP = measuredDefaults(SESSIONS);
 const RECOS = recommend(SESSIONS);
 const LAST = SESSIONS.reduce((m, s) => Math.max(m, s.t.length ? s.t[s.t.length - 1] : 0), 0);
-const OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S };
+const OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
 const SLIDERS = [
   { key: 'socleCut', min: 0, max: 60_000, step: 1_000 },
   { key: 'threshold', min: 50_000, max: 500_000, step: 10_000, toggle: true },
@@ -141,6 +141,10 @@ function hypNote(key) {
   if (key === 'P') return T.hyp.guess;
   return HYP.measured[key] ? T.hyp.measured(HYP.measured[key]) : T.hyp.fallback;
 }
+// T par défaut : déduit du TTL des écritures en cache mesuré (spec § 7.4).
+function pauseNote() {
+  return HYP.pauseSwitchMin === PAUSE_SWITCH_MIN_1H ? T.hyp.pause1h(fmtShare(HYP.measured.cache1hShare)) : T.hyp.pause5m;
+}
 function sliderHtml(s) {
   const v = state.values[s.key];
   return `<div class="slider">
@@ -150,6 +154,7 @@ function sliderHtml(s) {
     <input type="range" id="sl-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${v}">
     ${s.hyp ? `<small>${hypNote(s.key)}</small>` : ''}
     ${s.key === 'threshold' ? '<small id="note-threshold"></small>' : ''}
+    ${s.key === 'pauseSwitchMin' ? `<small id="note-pauseSwitchMin">${pauseNote()}</small>` : ''}
   </div>`;
 }
 

@@ -46,3 +46,20 @@ test('une session antérieure aux 4 semaines qui précèdent le dernier tour n�
   ]);
   assert.deepEqual(recommend([old, S]), recommend([S]));
 });
+
+test('cache 1 h : le levier pause est recommandé avec T = 60 min mesuré', () => {
+  // mêmes tours que S, en cache 1 h, avec 2 h de pause (une pause de 1 h exactement n'excède pas 60 min)
+  const s1h = session([
+    { t: T, in: 10, cw: 120_000, cw1h: 120_000 },
+    { t: T + 60, in: 10, cr: 120_000, cw: 29_000, cw1h: 29_000 },
+    { t: T + 7_260, in: 10, cw: 149_000, cw1h: 149_000 },
+  ]);
+  const pause = recommend([s1h]).find((x) => x.lever === 'pause');
+  assert.ok(pause, 'levier pause absent');
+  assert.deepEqual(pause.params, { pauseSwitchMin: 60 });
+  assert.match(recommendationText(pause, 'usd'), /pauses de plus de 60 min/);
+});
+
+test('cache 5 min (fixture S) : T reste 15 min', () => {
+  assert.deepEqual(recommend([S]).find((x) => x.lever === 'pause').params, { pauseSwitchMin: 15 });
+});

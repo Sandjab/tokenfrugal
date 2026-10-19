@@ -5,7 +5,10 @@ import { ctxOf, median, isoWeek, zero, add, isRebuild, mainIndexes } from './uti
 // Leviers coupés : la simulation reproduit le réel corrigé.
 export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false };
 // Valeurs réalistes de l'optimum (spec § 7.5) ; P est une supposition.
+// pauseSwitchMin : valeur pour un cache de 5 min, et repli ; measuredDefaults la remplace selon le TTL mesuré.
 export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000 };
+// T quand les écritures en cache sont surtout en TTL 1 h : une pause de moins d'1 h ne casse pas le cache.
+export const PAUSE_SWITCH_MIN_1H = 60;
 // R et S quand rien ne permet de les mesurer.
 export const FALLBACK = { R: 50_000, S: 15_000 };
 const CACHE_TTL_1H = 3600;
@@ -13,9 +16,20 @@ const ZERO = Object.freeze({ usd: 0, wtok: 0 });
 
 // R : contexte du premier tour d'une reprise (après un compactage, ou en tête d'une session /clear).
 // S : taille des résumés de compactage (postTokens).
+// T (pauseSwitchMin) : 60 min si au moins la moitié des écritures en cache des tours principaux des
+// 4 semaines qui précèdent le dernier tour sont en TTL 1 h, sinon 15 min.
 export function measuredDefaults(sessions) {
   const resumes = [], posts = [];
+  let last = -Infinity;
+  for (const s of sessions) if (s.t.length) last = Math.max(last, s.t[s.t.length - 1]);
+  const from = last - 28 * 86_400;
+  let cw = 0, cw1h = 0;
   for (const s of sessions) {
+    for (let i = 0; i < s.t.length; i++) {
+      if (s.sub[i] || s.t[i] < from || s.t[i] > last) continue;
+      cw += s.cw[i];
+      cw1h += Math.min(s.cw1h[i], s.cw[i]);
+    }
     const main = mainIndexes(s);
     if (s.clearStart && main.length) resumes.push(ctxOf(s, main[0]));
     for (const e of s.events) {
@@ -24,10 +38,12 @@ export function measuredDefaults(sessions) {
       if (after !== undefined) resumes.push(ctxOf(s, after));
     }
   }
+  const cache1hShare = cw ? cw1h / cw : 0;
   return {
     R: resumes.length ? median(resumes) : FALLBACK.R,
     S: posts.length ? median(posts) : FALLBACK.S,
-    measured: { R: resumes.length, S: posts.length },
+    pauseSwitchMin: cache1hShare >= 0.5 ? PAUSE_SWITCH_MIN_1H : DEFAULTS.pauseSwitchMin,
+    measured: { R: resumes.length, S: posts.length, cache1hShare },
   };
 }
 

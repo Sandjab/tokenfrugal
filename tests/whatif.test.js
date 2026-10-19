@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { whatIf, measuredDefaults, NEUTRAL, FALLBACK } from '../src/model/whatif.js';
+import { whatIf, measuredDefaults, NEUTRAL, FALLBACK, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../src/model/whatif.js';
 import { session, near } from './helpers/model.js';
 
 // Valeurs en tokens pondérés (opus-4-6) : entrée 1, cache lu 0,1, écrit 5 min 1,25, écrit 1 h 2, sortie 5.
@@ -85,11 +85,11 @@ test('R et S mesurés : reprises après compactage et /clear, taille des résum�
   const d = measuredDefaults([clear, comp]);
   assert.equal(d.R, 25_000);   // médiane de 30 000, 21 000, 25 000
   assert.equal(d.S, 10_000);
-  assert.deepEqual(d.measured, { R: 3, S: 2 });
+  assert.deepEqual(d.measured, { R: 3, S: 2, cache1hShare: 0 });
 });
 
 test('rien à mesurer : valeurs de repli, signalées par measured = 0', () => {
-  assert.deepEqual(measuredDefaults([]), { ...FALLBACK, measured: { R: 0, S: 0 } });
+  assert.deepEqual(measuredDefaults([]), { ...FALLBACK, pauseSwitchMin: DEFAULTS.pauseSwitchMin, measured: { R: 0, S: 0, cache1hShare: 0 } });
 });
 
 test('aucune session : tout à zéro', () => {
@@ -238,4 +238,42 @@ test('intervalle : sauter les sessions hors de l’intervalle ne change aucun ch
 test('intervalle : une session dont seul un compactage tombe dedans est rejouée (son résumé compte)', () => {
   const s = session([{ t: T, in: 10, cw: 100_000 }], { events: [{ t: T + 100, kind: 'compact', trigger: 'manual', pre: 100_000, post: 8_000 }] });
   assert.ok(near(whatIf([s], NEUTRAL, { from: T + 50 }).real.wtok, 10_000 + 40_000));
+});
+
+// T du levier pause : une pause de 15 à 60 min ne casse pas un cache 1 h, basculer avant elle ne sert à
+// rien. T se déduit donc de la part des écritures en cache 1 h (tours principaux, 4 dernières semaines).
+const DAY = 86_400;
+const ttl = (...turns) => measuredDefaults([session(turns)]);
+test('T mesuré : cache 1 h majoritaire → 60 min, cache 5 min → 15 min', () => {
+  const all1h = ttl({ t: T, cw: 40_000, cw1h: 40_000 }, { t: T + 60, cr: 40_000, cw: 10_000, cw1h: 10_000 });
+  assert.equal(all1h.measured.cache1hShare, 1);
+  assert.equal(all1h.pauseSwitchMin, PAUSE_SWITCH_MIN_1H);
+  assert.equal(PAUSE_SWITCH_MIN_1H, 60);
+  const all5m = ttl({ t: T, cw: 40_000 }, { t: T + 60, cr: 40_000, cw: 10_000 });
+  assert.equal(all5m.measured.cache1hShare, 0);
+  assert.equal(all5m.pauseSwitchMin, 15);
+});
+
+test('T mesuré : exactement 50 % d’écritures 1 h → 60 min', () => {
+  const half = ttl({ t: T, cw: 30_000, cw1h: 30_000 }, { t: T + 60, cr: 30_000, cw: 30_000 });
+  assert.equal(half.measured.cache1hShare, 0.5);
+  assert.equal(half.pauseSwitchMin, 60);
+});
+
+test('T mesuré : tours hors des 4 semaines avant le dernier tour, et sous-agents, ignorés', () => {
+  // ancien tour en cache 1 h, 28 jours + 1 s avant le dernier : hors fenêtre ; à 28 jours pile : dedans
+  const old = ttl({ t: T - 28 * DAY - 1, cw: 900_000, cw1h: 900_000 }, { t: T, cw: 10_000 });
+  assert.equal(old.measured.cache1hShare, 0);
+  assert.equal(old.pauseSwitchMin, 15);
+  const edge = ttl({ t: T - 28 * DAY, cw: 900_000, cw1h: 900_000 }, { t: T, cw: 10_000 });
+  assert.equal(edge.pauseSwitchMin, 60);
+  const sub = ttl({ t: T, cw: 10_000 }, { t: T + 30, cw: 900_000, cw1h: 900_000, sub: 1 });
+  assert.equal(sub.measured.cache1hShare, 0);
+  assert.equal(sub.pauseSwitchMin, 15);
+});
+
+test('T mesuré : cw1h plafonné à cw ; aucune écriture → part 0, T = 15', () => {
+  assert.equal(ttl({ t: T, cw: 10_000, cw1h: 30_000 }, { t: T + 60, cw: 10_000 }).measured.cache1hShare, 0.5);
+  const none = ttl({ t: T, in: 10 });
+  assert.deepEqual([none.measured.cache1hShare, none.pauseSwitchMin], [0, 15]);
 });
