@@ -6,9 +6,10 @@ compactages, reprises après `/clear` — puis dit quoi changer dans sa façon d
 
 ## Statut
 
-v1 construite : `node bin/tokenfrugal.mjs report` relève `~/.claude/projects` dans `~/.tokenfrugal/` et
-écrit `report.html`. Spec : `docs/superpowers/specs/2026-10-19-tokenfrugal-design.md`, plan :
-`docs/superpowers/plans/2026-10-19-tokenfrugal-v1.md`. Chiffres réels de contrôle dans `private/`.
+v1 (CLI) et mode web construits. `node bin/tokenfrugal.mjs report` relève `~/.claude/projects` dans
+`~/.tokenfrugal/` et écrit `report.html` ; `npm run build:web` écrit `dist/index.html`, la page publiée sur
+GitHub Pages par `.github/workflows/pages.yml`. Specs : `docs/superpowers/specs/` ; plans :
+`docs/superpowers/plans/`. Chiffres réels de contrôle dans `private/`.
 
 ## Périmètre (décidé le 19 oct. 2026)
 

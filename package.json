@@ -2,6 +2,7 @@
   "name": "tokenfrugal",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Find where your Claude Code tokens go, from your local session logs.",
   "engines": { "node": ">=22" },
