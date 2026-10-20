@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 // bin/tokenfrugal.mjs — relève les sessions et génère la page (spec § 4).
 import { parseArgs } from 'node:util';
-import { stat, writeFile, mkdir } from 'node:fs/promises';
+import { stat, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { collect, loadSessions } from '../src/store/store.js';
+import { collect, loadSessions, exportHistory, importHistory } from '../src/store/store.js';
 import { buildReport } from '../src/report/build.js';
 import { recommend } from '../src/model/recommend.js';
 import { ANALYZER_VERSION } from '../src/read/session.js';
 import { T, recommendationText } from '../src/report/strings.js';
 
-const USAGE = 'usage : tokenfrugal <collect|report> [--projects <dossier>] [--store <dossier>] [--no-collect] [--open]';
+const USAGE = 'usage : tokenfrugal <collect|report|history> [--projects <dossier>] [--store <dossier>] [--no-collect] [--open] [--export <fichier> | --import <fichier>]';
+const HISTORY_ERRORS = {
+  'history-json': 'Fichier d’historique illisible', 'history-kind': 'Ce fichier n’est pas un historique tokenfrugal',
+  'history-schema': 'Historique d’une version incompatible', 'history-shape': 'Historique incomplet ou abîmé',
+};
 
 async function main(argv) {
   let values, positionals;
@@ -23,10 +27,13 @@ async function main(argv) {
         store: { type: 'string', default: path.join(os.homedir(), '.tokenfrugal') },
         'no-collect': { type: 'boolean', default: false },
         open: { type: 'boolean', default: false },
+        export: { type: 'string' },
+        import: { type: 'string' },
       },
     }));
   } catch { console.error(USAGE); return 2; }
   const cmd = positionals[0];
+  if (cmd === 'history') return history(values);
   if (cmd !== 'collect' && cmd !== 'report') { console.error(USAGE); return 2; }
 
   if (cmd === 'collect' || !values['no-collect']) {
@@ -54,6 +61,29 @@ async function main(argv) {
     if (values.open) openFile(file);
   }
   return 0;
+}
+
+// Exactement une des deux options : --export écrit le fichier, --import l'ajoute au stockage.
+async function history(values) {
+  if (!values.export === !values.import) { console.error(USAGE); return 2; }
+  if (values.export) {
+    const h = await exportHistory(values.store);
+    await writeFile(values.export, JSON.stringify(h));
+    const n = Object.values(h.months).reduce((a, m) => a + Object.keys(m.sessions).length, 0);
+    console.log(`Historique exporté (${n} sessions) : ${values.export}`);
+    return 0;
+  }
+  let obj;
+  try { obj = JSON.parse(await readFile(values.import, 'utf8')); }
+  catch { console.error(`${HISTORY_ERRORS['history-json']}.`); return 1; }
+  try {
+    const { added } = await importHistory(values.store, obj);
+    console.log(`${added} session${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''} depuis l’historique.`);
+    return 0;
+  } catch (e) {
+    if (HISTORY_ERRORS[e.message]) { console.error(`${HISTORY_ERRORS[e.message]}.`); return 1; }
+    throw e;
+  }
 }
 
 function openFile(file) {

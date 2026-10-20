@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { T0, assistant, writeProjects, tmpStore } from './helpers/logs.js';
@@ -41,4 +41,25 @@ test('dossier de journaux vide, ou stockage vide sans relevé : la page est écr
   const store2 = tmpStore();
   assert.equal(run('report', '--no-collect', '--store', store2).status, 0);
   assert.ok(existsSync(path.join(store2, 'report.html')));
+});
+
+test('history --export puis --import : aller-retour par fichier', () => {
+  const projects = writeProjects({ p: { s: { main: [assistant({ t: T0, input: 10, cw: 40_000 })] } } });
+  const store = tmpStore(), file = path.join(tmpStore(), 'h.json');
+  assert.equal(run('collect', '--projects', projects, '--store', store).status, 0);
+  const ex = run('history', '--export', file, '--store', store);
+  assert.equal(ex.status, 0, ex.stderr);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).kind, 'tokenfrugal-history');
+  const im = run('history', '--import', file, '--store', path.join(tmpStore(), 'b'));
+  assert.equal(im.status, 0, im.stderr);
+  assert.match(im.stdout, /1 session ajoutée/);
+});
+
+test('history : fichier qui n’est pas un historique → message, code 1 ; sans option → usage, code 2', () => {
+  const bad = path.join(tmpStore(), 'bad.json');
+  writeFileSync(bad, '{"kind":"autre"}');
+  const r = run('history', '--import', bad, '--store', tmpStore());
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /pas un historique tokenfrugal/);
+  assert.equal(run('history').status, 2);
 });

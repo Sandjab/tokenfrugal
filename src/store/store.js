@@ -5,6 +5,7 @@ import path from 'node:path';
 import { listSessions, readSession } from '../read/files.js';
 import { SCHEMA, mergeSessions } from './merge.js';
 import { hash } from './sha256.js';
+import { packHistory, unpackHistory } from './history.js';
 export { hash, SCHEMA };
 const MONTH_FILE = /^turns-\d{4}-\d{2}\.json$/;
 
@@ -61,4 +62,34 @@ export async function loadSessions(storeDir) {
     for (const [key, s] of Object.entries(data.sessions)) out.push({ key, ...s });
   }
   return out;
+}
+
+export async function exportHistory(storeDir) {
+  const index = await readJson(path.join(storeDir, 'index.json'), { schema: SCHEMA, sessions: {} });
+  let names = [];
+  try { names = await readdir(storeDir); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  const months = {};
+  for (const n of names.filter((x) => MONTH_FILE.test(x))) months[n.slice('turns-'.length, -'.json'.length)] = await readJson(path.join(storeDir, n), null);
+  return packHistory(index, months, Math.floor(Date.now() / 1000));
+}
+
+// Ajoute les sessions absentes du stockage local ; une session présente des deux côtés garde la
+// version locale, puisque ses fichiers sont là pour la relire (spec web § 6).
+export async function importHistory(storeDir, obj) {
+  const h = unpackHistory(obj);
+  const store = await openStore(storeDir);
+  let added = 0;
+  for (const [key, entry] of Object.entries(h.index.sessions)) {
+    if (store.index.sessions[key]) continue;
+    if (entry.month) {
+      const s = h.months[entry.month] && h.months[entry.month].sessions[key];
+      if (!s) continue;   // entrée d'index sans session : ignorée
+      (await store.month(entry.month)).sessions[key] = s;
+      store.touch(entry.month);
+    }
+    store.index.sessions[key] = entry;
+    added++;
+  }
+  await store.save();
+  return { added };
 }

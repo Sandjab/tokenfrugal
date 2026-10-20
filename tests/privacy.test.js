@@ -25,6 +25,7 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
   });
   const store = tmpStore();
   execFileSync(process.execPath, ['bin/tokenfrugal.mjs', 'report', '--projects', projects, '--store', store], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['bin/tokenfrugal.mjs', 'history', '--export', path.join(store, 'history-export.json'), '--store', store], { stdio: 'pipe' });
   const files = readdirSync(store);
   assert.ok(files.includes('report.html') && files.some((f) => f.startsWith('turns-')));
   for (const f of files) {

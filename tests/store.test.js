@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { collect, loadSessions } from '../src/store/store.js';
+import { collect, loadSessions, exportHistory, importHistory } from '../src/store/store.js';
 import { T0, assistant, writeProjects, tmpStore } from './helpers/logs.js';
 
 const SEPT = Date.UTC(2026, 8, 15, 9) / 1000;
@@ -104,4 +104,23 @@ test('lignes ignorées : total sur les sessions lues pendant ce relevé (spec §
   const store = tmpStore();
   assert.equal((await collect({ projectsDir: projects, storeDir: store })).ignored, 3);
   assert.equal((await collect({ projectsDir: projects, storeDir: store })).ignored, 0);   // rien relu
+});
+
+test('export puis import dans un stockage vide : mêmes sessions', async () => {
+  const { projects, store } = fixture();
+  await collect({ projectsDir: projects, storeDir: store });
+  const h = JSON.parse(JSON.stringify(await exportHistory(store)));
+  const other = path.join(tmpStore(), 'autre');
+  assert.deepEqual(await importHistory(other, h), { added: 2 });
+  const byKey = (a) => Object.fromEntries(a.map((s) => [s.key, s]));
+  assert.deepEqual(byKey(await loadSessions(other)), byKey(await loadSessions(store)));
+});
+
+test('import : une session déjà présente garde la version locale (ses fichiers sont là pour la relire)', async () => {
+  const { projects, store } = fixture();
+  await collect({ projectsDir: projects, storeDir: store });
+  const h = JSON.parse(JSON.stringify(await exportHistory(store)));
+  for (const m of Object.values(h.months)) for (const s of Object.values(m.sessions)) s.in = [999];
+  assert.deepEqual(await importHistory(store, h), { added: 0 });
+  assert.ok((await loadSessions(store)).every((s) => s.in[0] !== 999));
 });
