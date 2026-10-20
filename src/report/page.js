@@ -114,12 +114,27 @@ function plot(id, labels, series) {
   const el = $(id), css = getComputedStyle(document.documentElement);
   const color = (v) => css.getPropertyValue(v).trim();
   const axis = { stroke: color('--muted'), grid: { stroke: color('--grid') }, ticks: { stroke: color('--grid') } };
+  // Largeur d'un libellé en px CSS, mesurée avec la police de l'axe (mise à l'échelle par uPlot).
+  const textWidth = (u, a, s) => { u.ctx.font = a.font[0]; return u.ctx.measureText(s).width / uPlot.pxRatio; };
+  // Axe des montants aussi large que son plus long libellé, qui dépend de l'unité, de la langue et des
+  // montants. Au-delà du 2e passage, uPlot garde la taille calculée pour converger.
+  const fitSize = (u, values, i, cycle) => {
+    const a = u.axes[i];
+    if (cycle > 1) return a._size;
+    return Math.ceil(Math.max(0, ...(values || []).map((s) => textWidth(u, a, s))) + a.ticks.size + a.gap + 4);
+  };
+  // Marge droite : le dernier libellé de l'axe horizontal est centré sur le bord du tracé.
+  const padRight = (u) => {
+    const a = u.axes[0], v = a._values;
+    return v && v.length ? Math.ceil(textWidth(u, a, v[v.length - 1]) / 2 + 4) : 0;
+  };
   const u = new uPlot({
     width: el.clientWidth || 600, height: 220,
+    padding: [null, padRight, null, null],
     scales: { x: { time: false, distr: 2 } },
     axes: [
       { ...axis, values: (_, ticks) => ticks.map((i) => labels[i] ?? '') },
-      { ...axis, size: 70, values: (_, ticks) => ticks.map((v) => (state.unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v))) },
+      { ...axis, size: fitSize, values: (_, ticks) => ticks.map((v) => (state.unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v))) },
     ],
     series: [{ label: '' }, ...series.map((s, i) => ({ label: s.label, stroke: color(`--series-${i + 1}`), width: 2 }))],
   }, [labels.map((_, i) => i), ...series.map((s) => s.values)], el);

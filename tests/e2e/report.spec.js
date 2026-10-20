@@ -7,7 +7,7 @@ import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
 import { T0, writeProjects, tmpStore, assistant, user } from '../helpers/logs.js';
 
-let fullUrl, emptyUrl, weeksUrl;
+let fullUrl, emptyUrl, weeksUrl, bigUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -37,6 +37,17 @@ test.beforeAll(async () => {
   const weeksFile = path.join(store6, 'report.html');
   writeFileSync(weeksFile, buildReport({ analyzer: ANALYZER_VERSION, generated: wed + 7 * DAY, sessions: await loadSessions(store6) }));
   weeksUrl = pathToFileURL(weeksFile).href;
+  // Mêmes six semaines, montants de plusieurs milliers de dollars : libellés d'axe longs.
+  const bigWeeks = {};
+  for (let k = 0; k < 6; k++) {
+    const t = wed - k * 7 * DAY;
+    bigWeeks[`w${k}`] = { main: [user({ t }), assistant({ t: t + 5, input: 10, cw: 800_000_000 + k * 1_000_000 })] };
+  }
+  const storeBig = tmpStore();
+  await collect({ projectsDir: writeProjects({ demo: bigWeeks }), storeDir: storeBig });
+  const bigFile = path.join(storeBig, 'report.html');
+  writeFileSync(bigFile, buildReport({ analyzer: ANALYZER_VERSION, generated: wed + 7 * DAY, sessions: await loadSessions(storeBig) }));
+  bigUrl = pathToFileURL(bigFile).href;
   fullUrl = pathToFileURL(full).href;
   emptyUrl = pathToFileURL(empty).href;
 });
@@ -195,4 +206,25 @@ test('CSP : la page ne peut pas se connecter au réseau', async ({ page }) => {
     setTimeout(() => res('aucune violation'), 3000);
   }));
   expect(directive).toBe('connect-src');
+});
+
+// Pixels non transparents dans les 2 colonnes de chaque bord du canvas : un libellé d'axe tronqué y touche.
+async function edgeInk(page, id) {
+  return page.evaluate((id) => {
+    const c = document.querySelector(`#${id} canvas`), ctx = c.getContext('2d');
+    const ink = (x) => { const d = ctx.getImageData(x, 0, 2, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; };
+    return { left: ink(0), right: ink(c.width - 2) };
+  }, id);
+}
+
+test('libellés d’axe entiers : gros montants, deux unités, deux langues', async ({ page }) => {
+  await page.goto(bigUrl);
+  for (const lang of ['fr', 'en']) {
+    await page.click(`#lang-${lang}`);
+    for (const unit of ['usd', 'wtok']) {
+      await page.click(`#unit-${unit}`);
+      await expect(page.locator('#sweep-status')).toHaveText('', { timeout: 30_000 });
+      for (const id of ['ch-history', 'ch-whatif', 'ch-sweep']) expect(await edgeInk(page, id), `${id} ${lang} ${unit}`).toEqual({ left: 0, right: 0 });
+    }
+  }
 });
