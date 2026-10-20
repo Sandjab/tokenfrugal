@@ -9,13 +9,10 @@ import { collect, loadSessions, exportHistory, importHistory } from '../src/stor
 import { buildReport } from '../src/report/build.js';
 import { recommend } from '../src/model/recommend.js';
 import { ANALYZER_VERSION } from '../src/read/session.js';
-import { T, recommendationText } from '../src/report/strings.js';
+import { T, recommendationText, setLang, getLang } from '../src/report/strings.js';
 
-const USAGE = 'usage : tokenfrugal <collect|report|history> [--projects <dossier>] [--store <dossier>] [--no-collect] [--open] [--export <fichier> | --import <fichier>]';
-const HISTORY_ERRORS = {
-  'history-json': 'Fichier d’historique illisible', 'history-kind': 'Ce fichier n’est pas un historique tokenfrugal',
-  'history-schema': 'Historique d’une version incompatible', 'history-shape': 'Historique incomplet ou abîmé',
-};
+// Langue du CLI : --lang, sinon LC_ALL ou LANG (fr… → français), sinon anglais (spec web § 7.2).
+const envLang = () => (/^fr/i.test(process.env.LC_ALL || process.env.LANG || '') ? 'fr' : 'en');
 
 async function main(argv) {
   let values, positionals;
@@ -29,12 +26,14 @@ async function main(argv) {
         open: { type: 'boolean', default: false },
         export: { type: 'string' },
         import: { type: 'string' },
+        lang: { type: 'string' },
       },
     }));
-  } catch { console.error(USAGE); return 2; }
+  } catch { setLang(envLang()); console.error(T.cli.usage); return 2; }
+  setLang(values.lang === 'fr' || values.lang === 'en' ? values.lang : envLang());
   const cmd = positionals[0];
   if (cmd === 'history') return history(values);
-  if (cmd !== 'collect' && cmd !== 'report') { console.error(USAGE); return 2; }
+  if (cmd !== 'collect' && cmd !== 'report') { console.error(T.cli.usage); return 2; }
 
   if (cmd === 'collect' || !values['no-collect']) {
     let isDir = false;
@@ -52,7 +51,7 @@ async function main(argv) {
     const sessions = await loadSessions(values.store);
     await mkdir(values.store, { recursive: true });
     const file = path.join(values.store, 'report.html');
-    await writeFile(file, buildReport({ analyzer: ANALYZER_VERSION, generated: Math.floor(Date.now() / 1000), sessions }));
+    await writeFile(file, buildReport({ analyzer: ANALYZER_VERSION, generated: Math.floor(Date.now() / 1000), sessions, lang: getLang() }));
     const recos = recommend(sessions).slice(0, 3);
     console.log(T.cli.recommendations);
     if (!recos.length) console.log(`  ${T.cli.noRecommendation}`);
@@ -65,23 +64,23 @@ async function main(argv) {
 
 // Exactement une des deux options : --export écrit le fichier, --import l'ajoute au stockage.
 async function history(values) {
-  if (!values.export === !values.import) { console.error(USAGE); return 2; }
+  if (!values.export === !values.import) { console.error(T.cli.usage); return 2; }
   if (values.export) {
     const h = await exportHistory(values.store);
     await writeFile(values.export, JSON.stringify(h));
     const n = Object.values(h.months).reduce((a, m) => a + Object.keys(m.sessions).length, 0);
-    console.log(`Historique exporté (${n} sessions) : ${values.export}`);
+    console.log(T.cli.exported(values.export, n));
     return 0;
   }
   let obj;
   try { obj = JSON.parse(await readFile(values.import, 'utf8')); }
-  catch { console.error(`${HISTORY_ERRORS['history-json']}.`); return 1; }
+  catch { console.error(T.cli.historyError('history-json')); return 1; }
   try {
     const { added } = await importHistory(values.store, obj);
-    console.log(`${added} session${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''} depuis l’historique.`);
+    console.log(T.cli.imported(added));
     return 0;
   } catch (e) {
-    if (HISTORY_ERRORS[e.message]) { console.error(`${HISTORY_ERRORS[e.message]}.`); return 1; }
+    if (/^history-/.test(e.message)) { console.error(T.cli.historyError(e.message)); return 1; }
     throw e;
   }
 }

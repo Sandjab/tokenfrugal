@@ -113,7 +113,7 @@ Puis le rapport de la spec v1 § 8, précédé de deux boutons : « Enregistrer 
 - `strings.js` exporte `{ fr, en }` ; un test vérifie que les deux jeux ont les mêmes clés, et que
   chaque texte fonction a le même nombre de paramètres dans les deux langues.
 - Choix : dernière langue choisie (stockage du navigateur, lecture protégée par `try`), sinon la
-  langue du navigateur (`fr…` → français, sinon anglais).
+  langue des données (celle du CLI qui a écrit `report.html`), sinon la langue du navigateur (`fr…` → français, sinon anglais).
 - Les nombres et montants suivent la langue (`fr-FR` / `en-US`).
 - Changer de langue redessine sans recalculer.
 - Le sélecteur figure aussi dans `report.html`.

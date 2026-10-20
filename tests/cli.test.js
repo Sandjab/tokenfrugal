@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { T0, assistant, writeProjects, tmpStore } from './helpers/logs.js';
 
-const run = (...args) => spawnSync(process.execPath, ['bin/tokenfrugal.mjs', ...args], { encoding: 'utf8' });
+// Sorties attendues en français : la langue du CLI vient de LANG (spec web § 7.2).
+const run = (...args) => spawnSync(process.execPath, ['bin/tokenfrugal.mjs', ...args], { encoding: 'utf8', env: { ...process.env, LANG: 'fr_FR.UTF-8', LC_ALL: '' } });
 
 test('dossier des journaux introuvable : erreur explicite, code 1', () => {
   const r = run('collect', '--projects', path.join(tmpdir(), 'absent-tf'), '--store', tmpStore());
@@ -62,4 +63,11 @@ test('history : fichier qui n’est pas un historique → message, code 1 ; sans
   assert.equal(r.status, 1);
   assert.match(r.stderr, /pas un historique tokenfrugal/);
   assert.equal(run('history').status, 2);
+});
+
+test('--lang en : sortie en anglais', () => {
+  const r = run('report', '--no-collect', '--store', tmpStore(), '--lang', 'en');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /What to change first/);
+  assert.match(r.stdout, /Page written/);
 });
