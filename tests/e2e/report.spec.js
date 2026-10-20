@@ -165,12 +165,23 @@ test('langue : passage en anglais, montants reformatés, langue gardée au recha
   await expect(page.locator('#summary h2')).toHaveText('Summary');
 });
 
-test('langue changée pendant le balayage : aucune erreur, le balayage se termine', async ({ page }) => {
+test('langue changée pendant le balayage : texte anglais affiché, aucune erreur, le balayage se termine', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(fullUrl);
-  await page.click('#lang-en');   // tôt : le balayage du seuil tourne encore
-  await expect(page.locator('#sweep-status')).toHaveText('', { timeout: 30_000 });
+  const status = page.locator('#sweep-status');
+  await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);
+  await expect(status).toBeEmpty();
+  // même tâche que le déclenchement : le balayage vient de démarrer, aucun morceau n'a tourné
+  const during = await page.locator('#sl-socleCut').evaluate((el) => {
+    el.value = '20000';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('lang-en').click();
+    return document.getElementById('sweep-status').textContent;
+  });
+  expect(during).toBe('Computing…');
+  await expect(status).toBeEmpty({ timeout: 30_000 });
+  await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
