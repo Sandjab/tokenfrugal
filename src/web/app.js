@@ -19,7 +19,8 @@ function showLanding(ui) {
     <p class="note">${W.guarantee} <a href="${REPO_URL}" rel="noopener">${W.sourceLink}</a></p>
     <h2>${W.folderTitle}</h2>
     <div id="drop" class="drop">${W.dropHere}<br>
-      <label class="button">${W.pickFolder}<input type="file" id="pick-dir" webkitdirectory multiple hidden></label></div>
+      <label class="button">${W.pickFolder}<input type="file" id="pick-dir" webkitdirectory multiple hidden></label>
+      <p class="note" id="pick-note">${W.pickNote}</p></div>
     <details><summary>${W.hiddenTitle}</summary><ul>${W.hiddenHelp.map((x) => `<li>${x}</li>`).join('')}</ul></details>
     <h2>${W.historyTitle}</h2>
     <p class="note">${W.historyHelp}</p>

@@ -125,3 +125,10 @@ test('aucun fichier lisible : message sur l’accueil, pas de rapport vide', asy
   await expect(page.locator('#status')).toContainText('aucun fichier de session');
   await expect(page.locator('#report')).toBeHidden();
 });
+
+test('accueil : le message « importer » du navigateur est expliqué avant le choix du dossier', async ({ page }) => {
+  await page.goto(webUrl);
+  await expect(page.locator('#pick-note')).toContainText('rien n’est envoyé');
+  await page.click('#lang-en');
+  await expect(page.locator('#pick-note')).toContainText('nothing is sent');
+});
