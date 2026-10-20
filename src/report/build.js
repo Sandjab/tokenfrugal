@@ -9,18 +9,22 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const uplotDir = path.dirname(createRequire(import.meta.url).resolve('uplot'));
 
-// Ordre de dépendance : chaque fichier n'importe que ceux qui le précèdent (vérifié par un test).
-export const BUNDLE_FILES = [
+// Ordre de dépendance de chaque bundle : un fichier n'importe que ceux qui le précèdent (vérifié par un test).
+export const PAGE_FILES = [
   '../model/pricing.js', '../model/cost.js', '../model/util.js', '../model/metrics.js',
-  '../model/whatif.js', '../model/recommend.js', './strings.js', './page.js',
+  '../model/whatif.js', '../model/recommend.js', './strings.js', './page.js', '../web/app.js',
+];
+export const WORKER_FILES = [
+  '../store/sha256.js', '../read/session.js', '../read/group.js', '../store/merge.js',
+  '../store/history.js', '../web/read-web.js', '../web/worker.js',
 ];
 
-// Concatène les fichiers en un seul module : retire les lignes import et le mot export.
+// Concatène les fichiers en un seul script : retire les lignes import et le mot export.
 // Contrat (Global Constraints) : imports nommés sur une ligne, pas de nom en double.
-export function bundle() {
-  return BUNDLE_FILES.map((f) => {
+export function bundle(files = PAGE_FILES) {
+  return files.map((f) => {
     const src = readFileSync(path.join(here, f), 'utf8');
-    return `// --- ${path.basename(f)}\n${src.replace(/^import .*;$/gm, '').replace(/^export (?=(const|function|class|let) )/gm, '')}`;
+    return `// --- ${path.basename(f)}\n${src.replace(/^import .*;$/gm, '').replace(/^export (?=(?:async\s+)?(?:const|let|class|function)\b)/gm, '')}`;
   }).join('\n');
 }
 
@@ -78,6 +82,20 @@ export function buildReport(data) {
     lang: data.lang || 'fr',
     body: `<header><h1>tokenfrugal</h1><div id="controls"></div></header>\n${SECTIONS}`,
     extra: `<script type="application/json" id="tf-data">${safeJson(data)}</script>\n`,
+    scripts: [noClose(read(path.join(uplotDir, 'uPlot.iife.min.js'))), noClose(bundle())],
+  });
+}
+
+// dist/index.html : accueil, puis rapport. Le code du worker est embarqué en texte (non exécuté par la
+// page) et lancé depuis un blob, d'où worker-src blob: dans la CSP.
+export function buildWeb() {
+  return page({
+    lang: 'en',
+    body: `<div id="landing"></div>
+<div id="report" hidden><header><h1>tokenfrugal</h1><div id="controls"></div></header>
+<div id="toolbar"></div>
+${SECTIONS}</div>`,
+    extra: `<script type="text/plain" id="tf-worker">${noClose(bundle(WORKER_FILES))}</script>\n`,
     scripts: [noClose(read(path.join(uplotDir, 'uPlot.iife.min.js'))), noClose(bundle())],
   });
 }

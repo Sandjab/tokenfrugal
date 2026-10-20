@@ -5,24 +5,36 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { BUNDLE_FILES, bundle, buildReport } from '../src/report/build.js';
+import { PAGE_FILES, WORKER_FILES, bundle, buildReport, buildWeb } from '../src/report/build.js';
 
-test('chaque import du bundle vise un fichier placé avant lui (contrat de concaténation)', () => {
-  const abs = BUNDLE_FILES.map((f) => path.resolve('src/report', f));
-  abs.forEach((file, i) => {
-    for (const l of readFileSync(file, 'utf8').split('\n').filter((x) => /^\s*import\b/.test(x))) {
-      const m = /^import \{[^}]+\} from '(\.\.?\/[^']+)';$/.exec(l);
-      assert.ok(m, `${path.basename(file)} : import hors contrat : ${l}`);
-      const j = abs.indexOf(path.resolve(path.dirname(file), m[1]));
-      assert.ok(j >= 0 && j < i, `${path.basename(file)} importe ${m[1]}, absent du bundle ou placé après`);
-    }
+for (const [name, files] of [['page', PAGE_FILES], ['worker', WORKER_FILES]]) {
+  test(`bundle ${name} : chaque import vise un fichier placé avant lui (contrat de concaténation)`, () => {
+    const abs = files.map((f) => path.resolve('src/report', f));
+    abs.forEach((file, i) => {
+      for (const l of readFileSync(file, 'utf8').split('\n').filter((x) => /^\s*import\b/.test(x))) {
+        const m = /^import \{[^}]+\} from '(\.\.?\/[^']+)';$/.exec(l);
+        assert.ok(m, `${path.basename(file)} : import hors contrat : ${l}`);
+        const j = abs.indexOf(path.resolve(path.dirname(file), m[1]));
+        assert.ok(j >= 0 && j < i, `${path.basename(file)} importe ${m[1]}, absent du bundle ou placé après`);
+      }
+    });
   });
-});
 
-test('le bundle se compile comme un seul module (aucun nom en double)', () => {
-  const file = path.join(mkdtempSync(path.join(tmpdir(), 'tf-bundle-')), 'bundle.mjs');
-  writeFileSync(file, bundle());
-  execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
+  test(`bundle ${name} : se compile comme un seul module, sans export restant ni nom en double`, () => {
+    const code = bundle(files);
+    assert.ok(!/^export /m.test(code));
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'tf-bundle-')), 'bundle.mjs');
+    writeFileSync(file, code);
+    execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
+  });
+}
+
+test('page web : CSP, code du worker non exécuté, aucune donnée embarquée', () => {
+  const html = buildWeb();
+  assert.match(html, /<meta http-equiv="Content-Security-Policy" content="[^"]*connect-src 'none'/);
+  assert.match(html, /<script type="text\/plain" id="tf-worker">/);
+  assert.ok(!html.includes('id="tf-data"'));
+  assert.ok(html.includes('id="landing"'));
 });
 
 test('les données embarquées ne peuvent pas fermer la balise script', () => {
