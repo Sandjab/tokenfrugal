@@ -95,7 +95,9 @@ async function analyze(ui) {
       // Rien de lisible : une erreur claire plutôt qu'un rapport vide.
       if (m.stats.unreadable > 0 && m.stats.unreadable === m.stats.listed) { showLanding(ui); setStatus(T.web.allUnreadable); return; }
       ui.result = m;
-      showReport(ui);
+      // Le calcul du rapport fige la page près d'une seconde sur un gros dossier : on le dit d'abord.
+      setStatus(T.web.rendering);
+      requestAnimationFrame(() => setTimeout(() => showReport(ui)));
     }
   };
   worker.onerror = (e) => { stop(); showLanding(ui); setStatus(T.web.error(e.message)); };

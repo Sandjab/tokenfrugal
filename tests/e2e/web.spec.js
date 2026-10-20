@@ -143,3 +143,16 @@ test('clic sur Analyser : barre et statut affichés tout de suite, avant toute r
   expect(now).toEqual({ bar: true, status: 'Préparation des fichiers : 0 / 2' });
   await expect(page.locator('#report')).toBeVisible();
 });
+
+test('fin d’analyse : « Préparation du rapport… » affiché pendant le calcul du rapport', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.setInputFiles('#pick-dir', writeProjects({ p: { a: { main: sessionLines(T0) } } }));
+  await page.evaluate(() => {
+    window.__seen = [];
+    new MutationObserver(() => { const s = document.getElementById('status'); if (s && window.__seen.at(-1) !== s.textContent) window.__seen.push(s.textContent); })
+      .observe(document, { subtree: true, childList: true, characterData: true });
+    document.getElementById('analyze').click();
+  });
+  await expect(page.locator('#report')).toBeVisible();
+  expect(await page.evaluate(() => window.__seen)).toContain('Préparation du rapport…');
+});
