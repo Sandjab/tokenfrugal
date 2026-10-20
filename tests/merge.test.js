@@ -14,7 +14,7 @@ const fakeSession = (start, ignored = {}) => ({ analyzer: 1, start, t: [start], 
 test('relevé : sessions lues et rangées par mois de leur premier tour, compteurs', async () => {
   const s = memStore(), calls = [];
   const r = await mergeSessions(s, [entry('a'), entry('b')], async (e) => { calls.push(e.id); return fakeSession(e.id === 'a' ? SEPT : OCT, { corrupt: 2 }); });
-  assert.deepEqual(r, { listed: 2, read: 2, unchanged: 0, kept: 0, ignored: 4 });
+  assert.deepEqual(r, { listed: 2, read: 2, unchanged: 0, kept: 0, ignored: 4, unreadable: 0 });
   assert.deepEqual(Object.keys(s.months).sort(), ['2026-09', '2026-10']);
   assert.deepEqual([...s.touched].sort(), ['2026-09', '2026-10']);
 });
@@ -49,4 +49,19 @@ test('session sans tour : indexée sans mois, non relue ensuite', async () => {
   assert.equal(Object.values(s.index.sessions)[0].month, null);
   assert.equal((await mergeSessions(s, [entry('a')], async () => null)).unchanged, 1);
   assert.equal(monthOf(OCT), '2026-10');
+});
+
+test('session illisible (read → undefined) : comptée à part, ni indexée ni retirée de son mois, relue au passage suivant', async () => {
+  const s = memStore();
+  await mergeSessions(s, [entry('a')], async () => fakeSession(SEPT));
+  const seen = [];
+  const r = await mergeSessions(s, [entry('a', 5000), entry('b')], async () => undefined, (p) => seen.push(p.done));
+  assert.equal(r.unreadable, 2);
+  assert.equal(r.listed, 2);
+  assert.equal(Object.keys(s.months['2026-09'].sessions).length, 1);   // l'ancienne version de a reste
+  assert.equal(Object.keys(s.index.sessions).length, 1);               // b n'est pas indexée
+  assert.deepEqual(seen, [1, 2]);
+  const again = await mergeSessions(s, [entry('a', 5000), entry('b')], async () => fakeSession(OCT));
+  assert.equal(again.read, 2);
+  assert.equal(again.unreadable, 0);
 });

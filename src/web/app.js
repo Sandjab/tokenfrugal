@@ -23,7 +23,7 @@ function showLanding(ui) {
     <details><summary>${W.hiddenTitle}</summary><ul>${W.hiddenHelp.map((x) => `<li>${x}</li>`).join('')}</ul></details>
     <h2>${W.historyTitle}</h2>
     <p class="note">${W.historyHelp}</p>
-    <input type="file" id="pick-history" accept=".json,application/json">
+    <p><label class="button">${W.pickHistory}<input type="file" id="pick-history" accept=".json,application/json" hidden></label></p>
     ${ui.historyFile ? `<p class="note">${W.historyReady(esc(ui.historyFile.name))}</p>` : ''}
     <p><button id="analyze" ${n && !ui.running ? '' : 'disabled'}>${W.analyze}</button></p>
     <p id="status" role="status">${ui.items ? (n ? W.folderReady(n) : W.noJsonl) : ''}</p>
@@ -48,16 +48,18 @@ function showLanding(ui) {
 async function filesFromEntries(entries) {
   const out = [];
   const walk = async (entry) => {
-    if (entry.isFile) {
-      if (entry.name.endsWith('.jsonl')) out.push({ file: await new Promise((res, rej) => entry.file(res, rej)), path: entry.fullPath });
-    } else if (entry.isDirectory) {
-      const reader = entry.createReader();
-      for (;;) {
-        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
-        if (!batch.length) break;
-        for (const e of batch) await walk(e);
+    try {   // une entrée qui échoue est sautée : jamais bloquant (spec web § 5)
+      if (entry.isFile) {
+        if (entry.name.endsWith('.jsonl')) out.push({ file: await new Promise((res, rej) => entry.file(res, rej)), path: entry.fullPath });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        for (;;) {
+          const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+          if (!batch.length) break;
+          for (const e of batch) await walk(e);
+        }
       }
-    }
+    } catch { /* entrée illisible : ignorée */ }
   };
   for (const e of entries) await walk(e);
   return out;
@@ -84,7 +86,13 @@ async function analyze(ui) {
       setStatus(T.web.progress(m.done, m.total));
     } else if (m.type === 'warning') ui.warnings.push(m.code);
     else if (m.type === 'error') { stop(); showLanding(ui); setStatus(m.message === 'no-jsonl' ? T.web.noJsonl : T.web.error(m.message)); }
-    else if (m.type === 'done') { stop(); ui.result = m; showReport(ui); }
+    else if (m.type === 'done') {
+      stop();
+      // Rien de lisible : une erreur claire plutôt qu'un rapport vide.
+      if (m.stats.unreadable > 0 && m.stats.unreadable === m.stats.listed) { showLanding(ui); setStatus(T.web.allUnreadable); return; }
+      ui.result = m;
+      showReport(ui);
+    }
   };
   worker.onerror = (e) => { stop(); showLanding(ui); setStatus(T.web.error(e.message)); };
   worker.postMessage({ items: ui.items, history });
@@ -106,7 +114,7 @@ function renderToolbar(ui) {
     <p><button id="save-history">${W.saveHistory}</button> <button id="another">${W.another}</button></p>
     <p class="note">${W.saveHint}</p>
     <p class="note" id="run-stats">${T.cli.collected(m.stats)}</p>
-    <div id="warnings">${ui.warnings.map((c) => `<p class="warn">${W.historyError(c)}</p>`).join('')}</div>`;
+    <div id="warnings">${ui.warnings.map((c) => `<p class="warn">${W.historyError(c)}</p>`).join('')}${m.stats.unreadable > 0 ? `<p class="warn">${W.unreadable(m.stats.unreadable)}</p>` : ''}</div>`;
   document.getElementById('save-history').onclick = () => saveHistory(m.history);
   document.getElementById('another').onclick = () => location.reload();
 }

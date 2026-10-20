@@ -30,6 +30,8 @@ export async function* fileLines(file) {
 }
 
 // Une session : fichier principal puis sous-agents. Un fichier illisible est compté, jamais bloquant.
+// Si TOUS les fichiers sont illisibles, undefined (≠ null « sans tour ») : la session sera relue au
+// passage suivant au lieu d'être figée vide dans l'historique.
 export async function readEntry(entry, byRel) {
   const r = new SessionReader();
   let unreadable = 0;
@@ -38,6 +40,7 @@ export async function readEntry(entry, byRel) {
     try { for await (const line of fileLines(byRel.get(f.rel))) r.feedLine(line); }
     catch { unreadable++; }
   }
+  if (unreadable === entry.files.length) return undefined;
   const s = r.result();
   if (s && unreadable) s.ignored['unreadable-file'] = (s.ignored['unreadable-file'] || 0) + unreadable;
   return s;

@@ -11,12 +11,12 @@ export const monthOf = (sec) => new Date(sec * 1000).toISOString().slice(0, 7); 
 export const stampOf = (files) => hash(files.map((f) => `${f.rel}:${f.size}:${Math.floor(f.mtimeMs / 1000)}`).join('|'));
 
 // store : { index: { sessions }, month(m) → Promise<{ sessions }>, touch(m) }.
-// entries : sortie de groupSessions ; read(entry) → Promise<Session | null>.
+// entries : sortie de groupSessions ; read(entry) → Promise<Session | null | undefined> (undefined : fichiers illisibles, à retenter).
 // Une session nouvelle ou changée est relue et remplacée ; une session dont les fichiers ont disparu
 // (purge de Claude Code) est gardée telle quelle.
 export async function mergeSessions(store, entries, read, onProgress) {
   const listed = new Set();
-  let nRead = 0, unchanged = 0, ignored = 0;
+  let nRead = 0, unchanged = 0, ignored = 0, unreadable = 0;
   for (const [i, e] of entries.entries()) {
     const key = hash(`${e.slug}/${e.id}`);
     listed.add(key);
@@ -25,6 +25,11 @@ export async function mergeSessions(store, entries, read, onProgress) {
     if (prev && prev.stamp === stamp && prev.analyzer === ANALYZER_VERSION) unchanged++;
     else {
       const s = await read(e);
+      if (s === undefined) {   // illisible : ni indexée ni retirée de son mois, donc retentée au prochain relevé
+        unreadable++;
+        if (onProgress) onProgress({ done: i + 1, total: entries.length });
+        continue;
+      }
       nRead++;
       if (prev && prev.month) { delete (await store.month(prev.month)).sessions[key]; store.touch(prev.month); }
       let m = null;
@@ -39,5 +44,5 @@ export async function mergeSessions(store, entries, read, onProgress) {
     if (onProgress) onProgress({ done: i + 1, total: entries.length });
   }
   const kept = Object.keys(store.index.sessions).filter((k) => !listed.has(k)).length;
-  return { listed: entries.length, read: nRead, unchanged, kept, ignored };
+  return { listed: entries.length, read: nRead, unchanged, kept, ignored, unreadable };
 }

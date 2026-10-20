@@ -104,3 +104,24 @@ test('langue : le sélecteur du rapport agit après l’analyse (et non celui de
   await page.click('#lang-en');
   await expect(page.locator('#summary h2')).toHaveText('Summary');
 });
+
+test('fichier modifié après sa sélection : illisible pour le navigateur, signalé, jamais figé vide', async ({ page }) => {
+  const dir = writeProjects({ p: { a: { main: sessionLines(T0) }, b: { main: sessionLines(T0 + 3600) } } });
+  await page.goto(webUrl);
+  await page.setInputFiles('#pick-dir', dir);
+  // Chromium refuse de lire un fichier dont la taille a changé depuis la sélection.
+  appendFileSync(path.join(dir, 'p', 'b.jsonl'), `${assistant({ t: T0 + 3700, input: 10, cr: 35_000, cw: 1_000 })}\n`);
+  await page.click('#analyze');
+  await expect(page.locator('#report')).toBeVisible();
+  await expect(page.locator('#warnings')).toContainText('1 session illisible');
+});
+
+test('aucun fichier lisible : message sur l’accueil, pas de rapport vide', async ({ page }) => {
+  const dir = writeProjects({ p: { a: { main: sessionLines(T0) } } });
+  await page.goto(webUrl);
+  await page.setInputFiles('#pick-dir', dir);
+  appendFileSync(path.join(dir, 'p', 'a.jsonl'), `${assistant({ t: T0 + 3700, input: 10, cr: 35_000, cw: 1_000 })}\n`);
+  await page.click('#analyze');
+  await expect(page.locator('#status')).toContainText('aucun fichier de session');
+  await expect(page.locator('#report')).toBeHidden();
+});

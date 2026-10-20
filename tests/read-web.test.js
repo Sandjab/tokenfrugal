@@ -50,6 +50,14 @@ test('fichier de sous-agent illisible : compté comme unreadable-file, la sessio
   assert.equal(s.ignored['unreadable-file'], 1);
 });
 
+test('tous les fichiers de la session illisibles : undefined (ni null, ni session), pour être relue plus tard', async () => {
+  const entry = { slug: 'p', id: 's', files: [{ rel: 'p/s.jsonl', size: 1, mtimeMs: 0 }, { rel: 'p/s/subagents/x.jsonl', size: 1, mtimeMs: 0 }] };
+  assert.equal(await readEntry(entry, new Map()), undefined);
+  // lisible mais sans tour : null, et non undefined
+  const vide = new File(['pas du json\n'], 's.jsonl');
+  assert.equal(await readEntry({ ...entry, files: [entry.files[0]] }, new Map([['p/s.jsonl', vide]])), null);
+});
+
 test('describe : seuls les .jsonl, chemins recadrés sur projects/', () => {
   const f = new File(['x'], 'a.jsonl', { lastModified: 5 });
   const { descs, byRel } = describe([{ file: f, path: '.claude/projects/p/a.jsonl' }, { file: f, path: '.claude/settings.json' }]);
