@@ -31,7 +31,8 @@ export function bundle(files = PAGE_FILES) {
 // JSON sûr dans <script> : « < » échappé, donc pas de </script> possible.
 export const safeJson = (data) => JSON.stringify(data).replace(/</g, '\\u003c');
 const noClose = (js) => js.replace(/<\/script/gi, '<\\/script');
-const read = (file) => readFileSync(file, 'utf8');
+// Fins de ligne normalisées : le texte haché est celui que le navigateur exécute, même sur un dépôt en CRLF.
+const read = (file) => readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 
 const sha = (s) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`;
 
