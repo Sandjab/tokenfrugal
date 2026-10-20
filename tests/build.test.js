@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -35,4 +36,18 @@ test('les données embarquées ne peuvent pas fermer la balise script', () => {
 test('aucune ressource externe chargée par la page', () => {
   const html = buildReport({ analyzer: 1, sessions: [] });
   assert.ok(!/<(script|link|img)[^>]+(src|href)=["']?https?:/i.test(html));
+});
+
+test('CSP : chaque script exécutable embarqué est autorisé par son empreinte, aucune connexion réseau', () => {
+  const html = buildReport({ analyzer: 1, sessions: [] });
+  const policy = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html)[1];
+  for (const d of ["default-src 'none'", "connect-src 'none'", "form-action 'none'", "base-uri 'none'", 'worker-src blob:']) assert.ok(policy.includes(d), d);
+  const scripts = [...html.matchAll(/<script(?: type="module")?>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.equal(scripts.length, 2);
+  for (const s of scripts) assert.ok(policy.includes(`'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`));
+});
+
+test('<html lang> suit la langue des données, français par défaut', () => {
+  assert.match(buildReport({ analyzer: 1, sessions: [] }), /^<!doctype html>\n<html lang="fr">/);
+  assert.match(buildReport({ analyzer: 1, sessions: [], lang: 'en' }), /^<!doctype html>\n<html lang="en">/);
 });

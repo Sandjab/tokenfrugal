@@ -1,5 +1,6 @@
 // src/report/build.js — assemble la page autonome : données, code de src/model, textes, graphes
 // (spec § 8). Ne calcule rien : la page calcule avec le même code que le CLI.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -28,12 +29,35 @@ export const safeJson = (data) => JSON.stringify(data).replace(/</g, '\\u003c');
 const noClose = (js) => js.replace(/<\/script/gi, '<\\/script');
 const read = (file) => readFileSync(file, 'utf8');
 
-export function buildReport(data) {
+const sha = (s) => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`;
+
+// Politique de sécurité (spec web § 8) : seuls les scripts embarqués, autorisés par leur empreinte ;
+// aucune connexion réseau, même si du code tentait d'en ouvrir une.
+export function csp(scripts) {
+  return [
+    "default-src 'none'", `script-src ${scripts.map(sha).join(' ')}`, "style-src 'unsafe-inline'",
+    'worker-src blob:', 'img-src data:', "connect-src 'none'", "form-action 'none'", "base-uri 'none'",
+  ].join('; ');
+}
+
+const SECTIONS = `<main>
+<section id="summary"></section>
+<section id="history"></section>
+<section id="indicators"></section>
+<section id="whatif"></section>
+<section id="quality"></section>
+</main>
+<footer id="privacy"></footer>`;
+
+// Squelette commun aux deux pages. scripts = [uPlot, bundle de la page], déjà passés par noClose :
+// l'empreinte porte sur le texte exact placé entre les balises.
+function page({ lang, body, extra, scripts }) {
   return `<!doctype html>
-<html lang="fr">
+<html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="${csp(scripts)}">
 <title>tokenfrugal</title>
 <style>
 ${read(path.join(uplotDir, 'uPlot.min.css'))}
@@ -41,19 +65,19 @@ ${read(path.join(here, 'page.css'))}
 </style>
 </head>
 <body>
-<header><h1>tokenfrugal</h1><div id="controls"></div></header>
-<main>
-<section id="summary"></section>
-<section id="history"></section>
-<section id="indicators"></section>
-<section id="whatif"></section>
-<section id="quality"></section>
-</main>
-<footer id="privacy"></footer>
-<script type="application/json" id="tf-data">${safeJson(data)}</script>
-<script>${noClose(read(path.join(uplotDir, 'uPlot.iife.min.js')))}</script>
-<script type="module">${noClose(bundle())}</script>
+${body}
+${extra}<script>${scripts[0]}</script>
+<script type="module">${scripts[1]}</script>
 </body>
 </html>
 `;
+}
+
+export function buildReport(data) {
+  return page({
+    lang: data.lang || 'fr',
+    body: `<header><h1>tokenfrugal</h1><div id="controls"></div></header>\n${SECTIONS}`,
+    extra: `<script type="application/json" id="tf-data">${safeJson(data)}</script>\n`,
+    scripts: [noClose(read(path.join(uplotDir, 'uPlot.iife.min.js'))), noClose(bundle())],
+  });
 }

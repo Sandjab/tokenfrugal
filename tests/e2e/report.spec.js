@@ -173,3 +173,15 @@ test('langue changée pendant le balayage : aucune erreur, le balayage se termin
   await expect(page.locator('#sweep-status')).toHaveText('', { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
+
+test('CSP : la page ne peut pas se connecter au réseau', async ({ page }) => {
+  await page.route(/^https?:/, (r) => r.abort());
+  await page.goto(fullUrl);
+  await expect(page.locator('#summary .big')).not.toBeEmpty();   // les scripts autorisés tournent
+  const directive = await page.evaluate(() => new Promise((res) => {
+    document.addEventListener('securitypolicyviolation', (e) => res(e.effectiveDirective));
+    fetch('https://example.com/').catch(() => {});
+    setTimeout(() => res('aucune violation'), 3000);
+  }));
+  expect(directive).toBe('connect-src');
+});
