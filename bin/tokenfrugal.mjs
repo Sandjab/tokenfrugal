@@ -35,7 +35,7 @@ async function main(argv) {
     if (!isDir) { console.error(T.cli.noProjects(values.projects)); return 1; }
     const r = await collect({
       projectsDir: values.projects, storeDir: values.store,
-      onProgress: ({ done, total }) => process.stderr.write(`\r${done}/${total}`),
+      onProgress: ({ done, total }) => { if (done % 50 === 0 || done === total) process.stderr.write(`\r${done}/${total}`); },
     });
     process.stderr.write('\n');
     console.log(T.cli.collected(r));

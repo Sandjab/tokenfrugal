@@ -116,7 +116,7 @@ cw1h: [], sub: [], events: [], ignored: { <type>: n } }`, en colonnes ; `m[i]` i
 
 - Les hachages (SHA-256 tronqué) remplacent chemins et identifiants : le stockage ne contient
   aucun chemin.
-- `stamp` = hachage des chemins relatifs, tailles et dates des fichiers de la session.
+- `stamp` = hachage des chemins relatifs (séparateur `/`), tailles et dates à la seconde des fichiers de la session.
 - Session nouvelle, ou dont un fichier a changé de taille ou de date : relue entièrement, remplacée.
 - Fichier principal disparu (purge) : la session stockée n'est pas touchée.
 - `analyzer` = version de l'analyseur. Si elle change, les sessions dont les fichiers existent encore

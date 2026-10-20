@@ -66,8 +66,8 @@ Règles :
 - Recadrage : le chemin relatif part du premier segment `projects/` s'il existe (l'utilisateur a pu
   choisir `~/.claude`), sinon du dossier choisi. Seuls les `.jsonl` sont gardés.
 - Descripteur : `rel` (séparateur `/`), `size`, `mtimeMs = File.lastModified`. Côté Node,
-  `mtimeMs = Math.floor(stat.mtimeMs)` et `rel` est lui aussi normalisé avec `/`, pour que le stamp
-  d'une session soit le même dans les deux modes. À vérifier sur un corpus réel (§ 10).
+  `rel` est lui aussi normalisé avec `/`, et l'empreinte prend la date à la seconde
+  (`Math.floor(mtimeMs / 1000)`) : navigateur et système n'arrondissent pas la milliseconde de la même façon. À vérifier sur un corpus réel (§ 10).
 - Lecture en flux (`File.stream()`, décodage UTF-8, découpe par ligne) vers le `SessionReader`
   existant ; seules les sessions nouvelles ou modifiées par rapport à l'historique sont lues.
 - Progression envoyée par le worker : fichiers lus sur fichiers à lire.
