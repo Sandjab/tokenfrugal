@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { appendFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { collect, loadSessions, exportHistory, importHistory } from '../src/store/store.js';
+import { ANALYZER_VERSION } from '../src/read/session.js';
 import { T0, assistant, writeProjects, tmpStore } from './helpers/logs.js';
 
 const SEPT = Date.UTC(2026, 8, 15, 9) / 1000;
@@ -70,7 +71,7 @@ test('nouvelle version de l’analyseur : relue si le fichier existe, sinon gard
   const r = await collect({ projectsDir: projects, storeDir: store });
   assert.equal(r.read, 1);
   const byStart = Object.fromEntries((await loadSessions(store)).map((s) => [s.start, s.analyzer]));
-  assert.deepEqual(byStart, { [SEPT]: 0, [T0]: 1 });
+  assert.deepEqual(byStart, { [SEPT]: 0, [T0]: ANALYZER_VERSION });
 });
 
 test('fichier temporaire abandonné (coupure) ignoré ; aucun .tmp après un relevé normal', async () => {

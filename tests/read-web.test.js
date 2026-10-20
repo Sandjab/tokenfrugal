@@ -32,6 +32,19 @@ test('même dossier lu par Node et par la page : mêmes sessions, mêmes fichier
   assert.deepEqual(await readEntry(webEntries[0], byRel), await readSession(root, nodeEntries[0]));
 });
 
+test('U+2028 et U+2029 dans une chaîne JSON ne coupent pas la ligne : Node et la page lisent pareil, rien n\'est ignoré', async () => {
+  // Le journal est découpé sur \\n seulement ; readline, lui, coupait aussi sur ces deux séparateurs et jetait l'enregistrement en « corrupt ».
+  const root = writeProjects({
+    p: { s1: { main: [user({ t: T0, text: 'avant\u2028après\u2029fin' }), assistant({ t: T0 + 5, input: 10, output: 7, text: 'a\u2028b\u2029c' })] } },
+  });
+  const nodeEntries = await listSessions(root);
+  const { byRel } = describe(pickFolder(root));
+  const node = await readSession(root, nodeEntries[0]);
+  assert.deepEqual(await readEntry(groupSessions(describe(pickFolder(root)).descs)[0], byRel), node);
+  assert.equal(node.ignored.corrupt ?? 0, 0);
+  assert.equal(node.in[0], 10);
+});
+
 test('fichier de plusieurs Mo : lu en flux, lignes exactes à travers les morceaux, \\r\\n compris', async () => {
   const lines = Array.from({ length: 60_000 }, (_, i) => `ligne-${i}-${'x'.repeat(80)}`);
   const file = new File([lines.map((l, i) => (i % 7 ? `${l}\n` : `${l}\r\n`)).join('')], 'gros.jsonl');

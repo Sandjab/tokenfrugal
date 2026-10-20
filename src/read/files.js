@@ -1,7 +1,6 @@
 // src/read/files.js — trouve les sessions sous ~/.claude/projects et les lit (spec § 5.1).
 import { readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { SessionReader } from './session.js';
 import { groupSessions } from './group.js';
@@ -39,8 +38,15 @@ export async function readSession(root, entry) {
   const r = new SessionReader();
   for (const [i, f] of entry.files.entries()) {
     r.beginFile(i === 0 ? 'main' : 'sub');
-    const rl = createInterface({ input: createReadStream(path.join(root, f.rel)), crlfDelay: Infinity });
-    for await (const line of rl) r.feedLine(line);
+    // Coupe sur « \n » seulement, comme la page : readline coupait aussi sur U+2028 / U+2029,
+    // qui peuvent figurer dans une chaîne JSON. Un « \r » final est inoffensif (ligne vide ignorée, JSON.parse le tolère).
+    let rest = '';
+    for await (const chunk of createReadStream(path.join(root, f.rel), { encoding: 'utf8' })) {
+      const parts = (rest + chunk).split('\n');
+      rest = parts.pop();
+      for (const l of parts) r.feedLine(l);
+    }
+    if (rest) r.feedLine(rest);
   }
   return r.result();
 }

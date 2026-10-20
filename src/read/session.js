@@ -1,6 +1,8 @@
 // src/read/session.js — lit une session (fichier principal puis sous-agents) en tours et événements.
 // Ne garde que des nombres, des noms de modèle et des types de ligne (spec § 5).
-export const ANALYZER_VERSION = 1;
+// Version 2 : les lignes sont coupées sur « \n » seulement (U+2028 / U+2029 ne coupent plus un enregistrement) ;
+// les sessions déjà stockées sont relues une fois pour récupérer les enregistrements perdus.
+export const ANALYZER_VERSION = 2;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
