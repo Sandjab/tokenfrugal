@@ -1,19 +1,13 @@
-// src/report/page.js — rendu de la page (navigateur seulement) : lit les données embarquées et
-// calcule avec src/model, le même code que le CLI (spec § 8).
+// src/report/page.js — rendu du rapport dans le navigateur (spec v1 § 8, spec web § 4) : données
+// embarquées (CLI) ou issues de l'analyse faite dans la page ; calcule avec src/model.
 import { priceFor } from '../model/pricing.js';
 import { isoWeek, median, weekStart } from '../model/util.js';
 import { weekly, mergeWeeks, trendWeeks } from '../model/metrics.js';
 import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
-import { T, fmtCost, fmtTok, fmtPct, fmtShare, recommendationText } from './strings.js';
+import { T, fmtCost, fmtTok, fmtPct, fmtShare, recommendationText, setLang, getLang, pickLang } from './strings.js';
 
-const DATA = JSON.parse(document.getElementById('tf-data').textContent);
-const SESSIONS = DATA.sessions;
-const WEEKS = weekly(SESSIONS);
-const HYP = measuredDefaults(SESSIONS);
-const RECOS = recommend(SESSIONS);
-const LAST = SESSIONS.reduce((m, s) => Math.max(m, s.t.length ? s.t[s.t.length - 1] : 0), 0);
-const OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
+const LANG_KEY = 'tokenfrugal-lang';
 const SLIDERS = [
   { key: 'socleCut', min: 0, max: 60_000, step: 1_000 },
   { key: 'threshold', min: 50_000, max: 500_000, step: 10_000, toggle: true },
@@ -22,14 +16,16 @@ const SLIDERS = [
   { key: 'S', min: 1_000, max: 60_000, step: 1_000, hyp: true },
   { key: 'P', min: 0, max: 100_000, step: 1_000, hyp: true },
 ];
-const state = { unit: 'usd', period: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
+// Rapport affiché : données et calculs fixés par renderReport.
+let DATA, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, state, afterRender = null;
 const charts = new Map();
 let pending = false;
-// Derniers résultats gardés : ils portent les deux unités, la bascule d'unité ne rejoue donc rien.
-let lastWhatIf = null, lastSweep = null, sweepGen = 0;
+// Derniers résultats gardés : ils portent les deux unités, et ni la bascule d'unité ni le changement
+// de langue ne rejouent quoi que ce soit.
+let lastWhatIf = null, lastSweep = null, sweepGen = 0, sweepRunning = false;
 
 const $ = (id) => document.getElementById(id);
-const esc = (x) => String(x).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+export const esc = (x) => String(x).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const val = (c) => c[state.unit];
 const money = (c) => fmtCost(c, state.unit);
 const med = (a) => (a.length ? fmtTok(median(a)) : '—');
@@ -37,6 +33,63 @@ const ratio = (a, b) => (val(b) ? val(a) / val(b) : 0);
 const fmtSlider = (key, v) => (key === 'pauseSwitchMin' ? `${v} min` : fmtTok(v));
 const rows = (pairs) => pairs.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('');
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+
+// Langue : choix enregistré dans ce navigateur, sinon langue des données, sinon du navigateur.
+export function initLang(dataLang) {
+  let saved = null;
+  try { saved = localStorage.getItem(LANG_KEY); } catch { /* stockage indisponible */ }
+  setLang(pickLang(saved, dataLang, navigator.language));
+}
+export function langSwitchHtml() {
+  return `<span role="group" aria-label="${T.langLabel}">${['fr', 'en'].map((l) => `<button id="lang-${l}" aria-pressed="${l === getLang()}">${l.toUpperCase()}</button>`).join('')}</span>`;
+}
+export function bindLangSwitch(onChange) {
+  for (const l of ['fr', 'en']) {
+    $(`lang-${l}`).onclick = () => {
+      setLang(l);
+      try { localStorage.setItem(LANG_KEY, l); } catch { /* stockage indisponible */ }
+      onChange();
+    };
+  }
+}
+
+export function renderReport(data, onRender = null) {
+  DATA = data;
+  SESSIONS = data.sessions;
+  WEEKS = weekly(SESSIONS);
+  HYP = measuredDefaults(SESSIONS);
+  RECOS = recommend(SESSIONS);
+  LAST = SESSIONS.reduce((m, s) => Math.max(m, s.t.length ? s.t[s.t.length - 1] : 0), 0);
+  OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
+  state = { unit: 'usd', period: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
+  afterRender = onRender;
+  resetResults();
+  renderAll();
+}
+
+function resetResults() {
+  lastWhatIf = null;
+  lastSweep = null;
+  sweepRunning = false;
+  sweepGen++;   // annule un balayage en cours
+}
+
+// Tout le rapport. Les rejeux ne partent que s'il n'y a pas de résultat gardé.
+function renderAll() {
+  document.documentElement.lang = getLang();
+  $('privacy').textContent = DATA.web ? T.web.privacy : T.privacy;
+  renderHeader();
+  renderSummary();
+  renderHistory();
+  renderIndicators();
+  buildWhatIf();
+  if (lastWhatIf) showWhatIf(); else updateWhatIf();
+  if (lastSweep) showSweep();
+  else if (sweepRunning) $('sweep-status').textContent = T.computing;
+  else updateSweep();
+  renderQuality();
+  if (afterRender) afterRender();
+}
 
 // Période : les n semaines ISO qui finissent par celle du dernier tour, du lundi 00:00 local au dernier
 // tour. Tableaux et what-if couvrent ainsi exactement les mêmes jours.
@@ -66,7 +119,7 @@ function plot(id, labels, series) {
     scales: { x: { time: false, distr: 2 } },
     axes: [
       { ...axis, values: (_, ticks) => ticks.map((i) => labels[i] ?? '') },
-      { ...axis, size: 70, values: (_, ticks) => ticks.map((v) => (state.unit === 'usd' ? `${v} $` : fmtTok(v))) },
+      { ...axis, size: 70, values: (_, ticks) => ticks.map((v) => (state.unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v))) },
     ],
     series: [{ label: '' }, ...series.map((s, i) => ({ label: s.label, stroke: color(`--series-${i + 1}`), width: 2 }))],
   }, [labels.map((_, i) => i), ...series.map((s) => s.values)], el);
@@ -75,12 +128,12 @@ function plot(id, labels, series) {
 
 function renderHeader() {
   $('controls').innerHTML = `
-    <label>${T.period} <select id="period">${Object.entries(T.periods).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label>${T.period} <select id="period">${Object.entries(T.periods).map(([k, v]) => `<option value="${k}"${k === state.period ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     <span role="group" aria-label="${T.unit}">
-      <button id="unit-usd" aria-pressed="true">${T.units.usd}</button>
-      <button id="unit-wtok" aria-pressed="false">${T.units.wtok}</button>
-    </span>`;
-  $('period').onchange = (e) => { state.period = e.target.value; render(); };
+      ${['usd', 'wtok'].map((u) => `<button id="unit-${u}" aria-pressed="${u === state.unit}">${T.units[u]}</button>`).join('')}
+    </span>
+    ${langSwitchHtml()}`;
+  $('period').onchange = (e) => { state.period = e.target.value; resetResults(); renderAll(); };
   for (const u of ['usd', 'wtok']) {
     $(`unit-${u}`).onclick = () => {
       state.unit = u;
@@ -88,6 +141,7 @@ function renderHeader() {
       renderUnit();
     };
   }
+  bindLangSwitch(renderAll);
 }
 
 function renderSummary() {
@@ -141,7 +195,7 @@ function hypNote(key) {
   if (key === 'P') return T.hyp.guess;
   return HYP.measured[key] ? T.hyp.measured(HYP.measured[key]) : T.hyp.fallback;
 }
-// T par défaut : déduit du TTL des écritures en cache mesuré (spec § 7.4).
+// T par défaut : déduit du TTL des écritures en cache mesuré (spec v1 § 7.4).
 function pauseNote() {
   return HYP.pauseSwitchMin === PAUSE_SWITCH_MIN_1H ? T.hyp.pause1h(fmtShare(HYP.measured.cache1hShare)) : T.hyp.pause5m;
 }
@@ -158,7 +212,8 @@ function sliderHtml(s) {
   </div>`;
 }
 
-function renderWhatIf() {
+// Structure du bloc what-if et ses commandes ; les chiffres viennent de showWhatIf / showSweep.
+function buildWhatIf() {
   $('whatif').innerHTML = `<h2>${T.whatif}</h2><p>${T.whatifIntro}</p>
     <p><button id="wi-optimum">${T.optimum}</button> <button id="wi-neutral">${T.neutral}</button></p>
     <div class="sliders">${SLIDERS.map(sliderHtml).join('')}
@@ -182,20 +237,16 @@ function renderWhatIf() {
     if (s.toggle) $(`on-${s.key}`).onchange = (e) => { state.on[s.key] = e.target.checked; updateWhatIf(); updateSweep(); };
   }
   $('cb-cache1h').onchange = (e) => { state.cache1h = e.target.checked; updateWhatIf(); updateSweep(); };
-  $('wi-optimum').onclick = () => {
-    state.values = { ...OPTIMUM };
-    state.on = { threshold: true, pauseSwitchMin: true };
+  const preset = (values, on) => {
+    state.values = values;
+    state.on = on;
     state.cache1h = false;
-    renderWhatIf();
+    buildWhatIf();
+    updateWhatIf();
+    updateSweep();
   };
-  $('wi-neutral').onclick = () => {
-    state.values = { ...state.values, socleCut: 0 };
-    state.on = { threshold: false, pauseSwitchMin: false };
-    state.cache1h = false;
-    renderWhatIf();
-  };
-  updateWhatIf();
-  updateSweep();
+  $('wi-optimum').onclick = () => preset({ ...OPTIMUM }, { threshold: true, pauseSwitchMin: true });
+  $('wi-neutral').onclick = () => preset({ ...state.values, socleCut: 0 }, { threshold: false, pauseSwitchMin: false });
 }
 
 function scheduleWhatIf() {
@@ -206,17 +257,16 @@ function scheduleWhatIf() {
 function updateWhatIf() {
   lastWhatIf = whatIf(SESSIONS, params(), range());
   showWhatIf();
-  // seuil N ≤ R + P : une bascule ramènerait le contexte à R + P, pas sous N ; le levier ne joue pas
-  const v = state.values;
-  $('note-threshold').textContent = state.on.threshold && v.threshold <= v.R + v.P ? T.thresholdInactive : '';
 }
 function showWhatIf() {
-  const r = lastWhatIf;
+  const r = lastWhatIf, v = state.values;
   const gain = { usd: r.real.usd - r.sim.usd, wtok: r.real.wtok - r.sim.wtok };
   $('wi-real').textContent = money(r.real);
   $('wi-sim').textContent = money(r.sim);
   $('wi-gain').textContent = `${money(gain)} (${fmtShare(ratio(gain, r.real))})`;
   $('wi-note').textContent = T.whatifNote(r.switches, money({ usd: r.real.usd - r.measured.usd, wtok: r.real.wtok - r.measured.wtok }));
+  // seuil N ≤ R + P : une bascule ramènerait le contexte à R + P, pas sous N ; le levier ne joue pas
+  $('note-threshold').textContent = state.on.threshold && v.threshold <= v.R + v.P ? T.thresholdInactive : '';
   plot('ch-whatif', r.byWeek.map((w) => w.week), [
     { label: T.realCorrected, values: r.byWeek.map((w) => val(w.real)) },
     { label: T.simulated, values: r.byWeek.map((w) => val(w.sim)) },
@@ -227,14 +277,15 @@ function showWhatIf() {
 function updateSweep() {
   const gen = ++sweepGen, p = params(), r = range(), xs = [], rs = [];
   lastSweep = null;
-  $('sweep-status').textContent = T.computing;   // retiré à la fin ; un balayage qui remplace celui-ci le garde
+  sweepRunning = true;
+  $('sweep-status').textContent = T.computing;
   const step = () => {
     if (gen !== sweepGen) return;
     const n = 50_000 + xs.length * 25_000;
     xs.push(n);
     rs.push(whatIf(SESSIONS, { ...p, threshold: n }, r));
     if (n < 500_000) setTimeout(step, 0);
-    else { lastSweep = { xs, rs }; $('sweep-status').textContent = ''; showSweep(); }
+    else { lastSweep = { xs, rs }; sweepRunning = false; $('sweep-status').textContent = ''; showSweep(); }
   };
   requestAnimationFrame(() => setTimeout(step, 0));
 }
@@ -268,14 +319,10 @@ function renderUnit() {
   showSweep();
 }
 
-function render() {
-  renderSummary();
-  renderHistory();
-  renderIndicators();
-  renderWhatIf();
-  renderQuality();
+// report.html : données embarquées par le CLI. La page web, elle, appelle renderReport (app.js).
+const embedded = document.getElementById('tf-data');
+if (embedded) {
+  const data = JSON.parse(embedded.textContent);
+  initLang(data.lang);
+  renderReport(data);
 }
-
-$('privacy').textContent = T.privacy;
-renderHeader();
-render();

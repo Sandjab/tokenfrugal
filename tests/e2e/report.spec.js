@@ -153,3 +153,23 @@ test('balayage en cours : « Calcul en cours… » affiché, puis retiré à la 
   expect(during).toBe('Calcul en cours…');
   await expect(status).toBeEmpty();
 });
+
+test('langue : passage en anglais, montants reformatés, langue gardée au rechargement', async ({ page }) => {
+  await page.goto(fullUrl);
+  await expect(page.locator('#wi-sim')).not.toBeEmpty();
+  await page.click('#lang-en');
+  await expect(page.locator('#summary h2')).toHaveText('Summary');
+  await expect(page.locator('#wi-sim')).toHaveText(/^\$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.reload();
+  await expect(page.locator('#summary h2')).toHaveText('Summary');
+});
+
+test('langue changée pendant le balayage : aucune erreur, le balayage se termine', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(fullUrl);
+  await page.click('#lang-en');   // tôt : le balayage du seuil tourne encore
+  await expect(page.locator('#sweep-status')).toHaveText('', { timeout: 30_000 });
+  expect(errors).toEqual([]);
+});
