@@ -67,25 +67,28 @@ async function filesFromEntries(entries) {
 }
 
 const setStatus = (text) => { const el = document.getElementById('status'); if (el) el.textContent = text; };
+// Barre et statut relus à chaque appel : un changement de langue redessine l'accueil.
+const setProgress = (done, total, text) => {
+  const bar = document.getElementById('progress');
+  if (bar) { bar.hidden = false; bar.max = total || 1; bar.value = done; }
+  setStatus(text);
+};
+// Fichiers envoyés au worker par lots : une copie d'un seul tenant gèle la page plus d'une seconde
+// sur un gros dossier (mesuré : ~1,3 s pour 24 000 fichiers), sans rien afficher.
+const BATCH = 1000;
 
 async function analyze(ui) {
   ui.running = true;
   ui.warnings = [];
   document.getElementById('analyze').disabled = true;
-  setStatus(T.web.reading);
-  let history = null;
-  if (ui.historyFile) {
-    try { history = JSON.parse(await ui.historyFile.text()); } catch { ui.warnings.push('history-json'); }
-  }
+  const files = ui.items.filter((x) => x.path.endsWith('.jsonl'));
+  setProgress(0, files.length, T.web.preparing(0, files.length));
   const url = URL.createObjectURL(new Blob([document.getElementById('tf-worker').textContent], { type: 'text/javascript' }));
   const worker = new Worker(url);
   const stop = () => { worker.terminate(); URL.revokeObjectURL(url); ui.running = false; };
   worker.onmessage = ({ data: m }) => {
-    const bar = document.getElementById('progress');
-    if (m.type === 'progress') {
-      if (bar) { bar.hidden = false; bar.max = m.total; bar.value = m.done; }
-      setStatus(T.web.progress(m.done, m.total));
-    } else if (m.type === 'warning') ui.warnings.push(m.code);
+    if (m.type === 'progress') setProgress(m.done, m.total, T.web.progress(m.done, m.total));
+    else if (m.type === 'warning') ui.warnings.push(m.code);
     else if (m.type === 'error') { stop(); showLanding(ui); setStatus(m.message === 'no-jsonl' ? T.web.noJsonl : T.web.error(m.message)); }
     else if (m.type === 'done') {
       stop();
@@ -96,7 +99,15 @@ async function analyze(ui) {
     }
   };
   worker.onerror = (e) => { stop(); showLanding(ui); setStatus(T.web.error(e.message)); };
-  worker.postMessage({ items: ui.items, history });
+  for (let i = 0; i < files.length; i += BATCH) {
+    // Laisse l'écran se redessiner entre deux lots ; arrêt si le worker a déjà échoué.
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
+    if (!ui.running) return;
+    worker.postMessage({ type: 'files', items: files.slice(i, i + BATCH) });
+    const done = Math.min(i + BATCH, files.length);
+    setProgress(done, files.length, T.web.preparing(done, files.length));
+  }
+  worker.postMessage({ type: 'start', historyFile: ui.historyFile });
 }
 
 function showReport(ui) {

@@ -1,6 +1,6 @@
 // src/web/worker.js — analyse dans un Web Worker (spec web § 4-6) : historique éventuel, regroupement,
 // fusion, lecture des seules sessions changées. Messages :
-//   reçu   { items: [{ file, path }], history: objet | null }
+//   reçu   { type: 'files', items: [{ file, path }] } (par lots), puis { type: 'start', historyFile: File | null }
 //   envoyé { type: 'progress', done, total } | { type: 'warning', code }
 //          | { type: 'done', history, sessions, analyzer, stats } | { type: 'error', message }
 import { ANALYZER_VERSION } from '../read/session.js';
@@ -9,11 +9,16 @@ import { SCHEMA, mergeSessions } from '../store/merge.js';
 import { packHistory, unpackHistory } from '../store/history.js';
 import { describe, readEntry } from './read-web.js';
 
-async function analyze({ items, history }) {
+async function analyze({ items, historyFile }) {
   const t0 = Date.now();
   let base = { index: { schema: SCHEMA, sessions: {} }, months: {} };
-  if (history) {
-    try { base = unpackHistory(history); } catch (e) { postMessage({ type: 'warning', code: e.message }); }
+  // Fichier lu ici et non dans la page : l'objet parsé d'un gros historique bloquerait la page à la copie.
+  if (historyFile) {
+    let history = null;
+    try { history = JSON.parse(await historyFile.text()); } catch { postMessage({ type: 'warning', code: 'history-json' }); }
+    if (history) {
+      try { base = unpackHistory(history); } catch (e) { postMessage({ type: 'warning', code: e.message }); }
+    }
   }
   const { descs, byRel } = describe(items);
   const entries = groupSessions(descs);
@@ -32,4 +37,8 @@ async function analyze({ items, history }) {
   });
 }
 
-self.onmessage = (ev) => { analyze(ev.data).catch((e) => postMessage({ type: 'error', message: String((e && e.message) || e) })); };
+const received = [];
+self.onmessage = ({ data: m }) => {
+  if (m.type === 'files') { for (const x of m.items) received.push(x); return; }
+  analyze({ items: received, historyFile: m.historyFile }).catch((e) => postMessage({ type: 'error', message: String((e && e.message) || e) }));
+};

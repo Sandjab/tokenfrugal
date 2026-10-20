@@ -132,3 +132,14 @@ test('accueil : le message « importer » du navigateur est expliqué avant le c
   await page.click('#lang-en');
   await expect(page.locator('#pick-note')).toContainText('nothing is sent');
 });
+
+test('clic sur Analyser : barre et statut affichés tout de suite, avant toute réponse du worker', async ({ page }) => {
+  await page.goto(webUrl);
+  await page.setInputFiles('#pick-dir', writeProjects({ p: { a: { main: sessionLines(T0) }, b: { main: sessionLines(T0 + 3600) } } }));
+  const now = await page.evaluate(() => {
+    document.getElementById('analyze').click();
+    return { bar: !document.getElementById('progress').hidden, status: document.getElementById('status').textContent };
+  });
+  expect(now).toEqual({ bar: true, status: 'Préparation des fichiers : 0 / 2' });
+  await expect(page.locator('#report')).toBeVisible();
+});
