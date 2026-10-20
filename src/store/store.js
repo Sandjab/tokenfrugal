@@ -1,13 +1,13 @@
 // src/store/store.js — dossier local : index des sessions lues et tours rangés par mois (spec § 6).
 // Range et relit, ne calcule rien.
 import { mkdir, readFile, writeFile, rename, readdir } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { listSessions, readSession } from '../read/files.js';
 import { ANALYZER_VERSION } from '../read/session.js';
+import { hash } from './sha256.js';
+export { hash };
 
 export const SCHEMA = 1;
-export const hash = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const monthOf = (sec) => new Date(sec * 1000).toISOString().slice(0, 7);   // AAAA-MM, UTC
 const MONTH_FILE = /^turns-\d{4}-\d{2}\.json$/;
 
