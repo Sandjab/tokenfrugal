@@ -5,7 +5,7 @@ import { isoWeek, median, weekStart } from '../model/util.js';
 import { weekly, mergeWeeks, trendWeeks } from '../model/metrics.js';
 import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
-import { T, fmtCost, fmtTok, fmtPct, fmtShare, recommendationText, setLang, getLang, pickLang } from './strings.js';
+import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, setLang, getLang, pickLang } from './strings.js';
 
 const LANG_KEY = 'tokenfrugal-lang';
 const SLIDERS = [
@@ -109,7 +109,7 @@ function params() {
   return p;
 }
 
-function plot(id, labels, series) {
+function plot(id, xLabel, labels, series) {
   charts.get(id)?.destroy();
   const el = $(id), css = getComputedStyle(document.documentElement);
   const color = (v) => css.getPropertyValue(v).trim();
@@ -134,9 +134,10 @@ function plot(id, labels, series) {
     scales: { x: { time: false, distr: 2 } },
     axes: [
       { ...axis, values: (_, ticks) => ticks.map((i) => labels[i] ?? '') },
-      { ...axis, size: fitSize, values: (_, ticks) => ticks.map((v) => (state.unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v))) },
+      { ...axis, size: fitSize, values: (_, ticks) => ticks.map((v) => fmtAxis(v, state.unit)) },
     ],
-    series: [{ label: '' }, ...series.map((s, i) => ({ label: s.label, stroke: color(`--series-${i + 1}`), width: 2 }))],
+    // Axe horizontal nommé (sinon uPlot écrit « Value ») ; au survol, la légende montre le libellé, pas l'indice.
+    series: [{ label: xLabel, value: (_, i) => (i == null ? '--' : labels[i] ?? '') }, ...series.map((s, i) => ({ label: s.label, stroke: color(`--series-${i + 1}`), width: 2, value: (_, v) => (v == null ? '--' : fmtAxis(v, state.unit)) }))],
   }, [labels.map((_, i) => i), ...series.map((s) => s.values)], el);
   charts.set(id, u);
 }
@@ -179,7 +180,7 @@ function renderHistory() {
       <td>${fmtShare(ratio(w.costOver150k, w.cost))}</td><td>${sum(w.rebuilds)}</td><td>${sum(w.compactions)}</td>
       <td>${w.clearSessions}</td><td>${med(w.socleFirstCtx)}</td></tr>`).join('')}
     </tbody></table></div>`;
-  plot('ch-history', ws.map((w) => w.week), [{ label: T.cost, values: ws.map((w) => val(w.cost)) }]);
+  plot('ch-history', T.axisWeek, ws.map((w) => w.week), [{ label: T.cost, values: ws.map((w) => val(w.cost)) }]);
 }
 
 function renderIndicators() {
@@ -282,7 +283,7 @@ function showWhatIf() {
   $('wi-note').textContent = T.whatifNote(r.switches, money({ usd: r.real.usd - r.measured.usd, wtok: r.real.wtok - r.measured.wtok }));
   // seuil N ≤ R + P : une bascule ramènerait le contexte à R + P, pas sous N ; le levier ne joue pas
   $('note-threshold').textContent = state.on.threshold && v.threshold <= v.R + v.P ? T.thresholdInactive : '';
-  plot('ch-whatif', r.byWeek.map((w) => w.week), [
+  plot('ch-whatif', T.axisWeek, r.byWeek.map((w) => w.week), [
     { label: T.realCorrected, values: r.byWeek.map((w) => val(w.real)) },
     { label: T.simulated, values: r.byWeek.map((w) => val(w.sim)) },
   ]);
@@ -306,7 +307,7 @@ function updateSweep() {
 }
 function showSweep() {
   if (!lastSweep) return;   // balayage en cours : il s'affichera à la fin
-  plot('ch-sweep', lastSweep.xs.map(fmtTok), [
+  plot('ch-sweep', T.axisThreshold, lastSweep.xs.map(fmtTok), [
     { label: T.realCorrected, values: lastSweep.rs.map((x) => val(x.real)) },
     { label: T.simulated, values: lastSweep.rs.map((x) => val(x.sim)) },
   ]);

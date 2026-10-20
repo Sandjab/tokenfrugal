@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STRINGS, T, setLang, getLang, pickLang, fmtTok, fmtCost, fmtPct, recommendationText } from '../src/report/strings.js';
+import { STRINGS, T, setLang, getLang, pickLang, fmtTok, fmtCost, fmtPct, fmtAxis, recommendationText } from '../src/report/strings.js';
 
 // Même forme dans les deux langues : mêmes clés, même nombre de paramètres, même longueur de liste.
 function shape(x) {
@@ -35,4 +35,13 @@ test('formats et phrases suivent la langue', () => {
   assert.equal(fmtTok(150_000), '150 k');
   assert.equal(recommendationText(r, 'usd'), 'Basculer avant les pauses de plus de 60 min : −12,50 $ par semaine');
   assert.equal(T.summary, 'Résumé');
+});
+
+test('axes des graphiques : séparateur de milliers visible (l’espace fine U+202F ne fait que 1,7 px dans le canvas)', () => {
+  setLang('fr');
+  assert.equal(fmtAxis(42_500, 'usd'), '42 500,00 $');
+  assert.equal(fmtAxis(9_000_000_000, 'wtok'), '9 000,0 M');
+  setLang('en');
+  assert.equal(fmtAxis(42_500, 'usd'), '$42,500.00');
+  setLang('fr');
 });

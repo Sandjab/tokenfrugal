@@ -19,6 +19,9 @@ export function fmtCost(c, unit) {
 }
 export const fmtPct = (x) => `${x >= 0 ? '+' : ''}${nf(0).format(x * 100)}${sp()}%`;
 export const fmtShare = (x) => `${nf(0).format(x * 100)}${sp()}%`;
+// Graduation d'un axe de graphique. Dans le canvas, l'espace fine insécable (U+202F) des milliers
+// français ne fait que 1,7 px et disparaît à l'œil : on la remplace par une espace insécable ordinaire.
+export const fmtAxis = (v, unit) => (unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v)).replace(/\u202f/g, '\u00a0');
 export const recommendationText = (r, unit) => `${T.leverAction[r.lever](r.params)}${T.sep}−${fmtCost(r.perWeek, unit)} ${T.perWeek}`;
 
 const plural = (n, s, p) => (n > 1 ? p : s);   // français : 0 et 1 au singulier
@@ -80,6 +83,8 @@ export const STRINGS = {
     whatifNote: (n, summaries) => `${n} bascule${plural(n, '', 's')} simulée${plural(n, '', 's')}. Le coût réel inclut ${summaries} de résumés de compactage estimés (absents des journaux).`,
     byWeek: 'Réel et simulé par semaine',
     sweep: 'Coût simulé selon le seuil de bascule',
+    axisWeek: 'Semaine',
+    axisThreshold: 'Seuil de bascule',
     computing: 'Calcul en cours…',
     quality: 'Qualité de lecture',
     q: {
@@ -191,6 +196,8 @@ export const STRINGS = {
     whatifNote: (n, summaries) => `${n} simulated switch${one(n, '', 'es')}. Actual cost includes ${summaries} of estimated compaction summaries (missing from the logs).`,
     byWeek: 'Actual and simulated by week',
     sweep: 'Simulated cost by switch threshold',
+    axisWeek: 'Week',
+    axisThreshold: 'Switch threshold',
     computing: 'Computing…',
     quality: 'Reading quality',
     q: {

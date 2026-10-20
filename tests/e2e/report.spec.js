@@ -228,3 +228,16 @@ test('libellés d’axe entiers : gros montants, deux unités, deux langues', as
     }
   }
 });
+
+test('légende des graphiques : axe horizontal nommé et valeur survolée lisible, jamais « Value »', async ({ page }) => {
+  await page.goto(weeksUrl);
+  await expect(page.locator('#sweep-status')).toHaveText('', { timeout: 30_000 });
+  await expect(page.locator('#ch-history .u-legend')).toContainText('Semaine');
+  await expect(page.locator('#ch-sweep .u-legend')).toContainText('Seuil de bascule');
+  await page.hover('#ch-history .u-over', { position: { x: 5, y: 50 } });
+  await expect(page.locator('#ch-history .u-legend .u-series').first()).toContainText(/2026-W\d\d/);
+  await expect(page.locator('#ch-history .u-legend .u-series').nth(1)).toContainText(/\d,\d\d\s\$/);   // montant formaté, pas brut
+  await page.click('#lang-en');
+  await expect(page.locator('#ch-history .u-legend')).toContainText('Week');
+  for (const id of ['ch-history', 'ch-whatif', 'ch-sweep']) await expect(page.locator(`#${id} .u-legend`)).not.toContainText('Value');
+});
