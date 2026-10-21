@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { recommend } from '../src/model/recommend.js';
+import { measuredDefaults } from '../src/model/whatif.js';
 import { recommendationText, fmtTok, fmtCost } from '../src/report/strings.js';
 import { session, near } from './helpers/model.js';
 
@@ -67,4 +68,10 @@ test('cache 5 min (fixture S) : T reste 15 min', () => {
 test('fenêtre ancrée sur le dernier tour donné : un projet inactif depuis 10 semaines n’a pas de recommandation', () => {
   assert.deepEqual(recommend([S], T + 3660 + 10 * 7 * 86_400), []);
   assert.deepEqual(recommend([S], T + 3660), recommend([S]));
+});
+
+test('hypothèses données (habitudes de toutes les sessions) : la recommandation d’un projet suit le T global, pas celui du projet', () => {
+  // T global de 120 min : la pause d'1 h de S n'est plus visée, le levier pause disparaît
+  const hyp = { ...measuredDefaults([S]), pauseSwitchMin: 120 };
+  assert.deepEqual(recommend([S], undefined, hyp).map((x) => x.lever), ['socle']);
 });

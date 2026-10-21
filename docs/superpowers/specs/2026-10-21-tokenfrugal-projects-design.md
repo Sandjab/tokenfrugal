@@ -42,7 +42,9 @@ y lire son historique, son what-if et ses recommandations.
 
 - `id` = `hash(<dossier du projet sous ~/.claude/projects>)`, le même hachage que les clés de session
   (`src/store/sha256.js`). C'est la clé de regroupement : deux projets de même nom dans deux dossiers
-  différents restent distincts.
+  différents restent distincts. Exception, pour tenir § 3.1 : Claude Code range les sessions lancées
+  dans un worktree sous un dossier propre, `<dossier du projet>--claude-worktrees-<x>` ; ce suffixe
+  est retiré avant hachage, et le worktree compte dans son projet.
 - Calculé là où le dossier est connu, c'est-à-dire au regroupement (`groupSessions` fournit `slug`) :
   `mergeSessions` l'ajoute à la session lue. Le lecteur ne voit pas le chemin.
 

@@ -83,3 +83,12 @@ test('projet : session sans nom (aucun cwd) → id seul', async () => {
   await mergeSessions(s, [entry('a')], async () => fakeSession(OCT));
   assert.deepEqual(Object.values(s.months['2026-10'].sessions)[0].project, { id: hash('p') });
 });
+
+test('projet : une session de worktree (dossier « …--claude-worktrees-x ») a l’id de son projet, pas un faux projet à part', async () => {
+  const s = memStore();
+  const main = { slug: '-dev-clio', id: 'a', files: [{ rel: '-dev-clio/a.jsonl', size: 10, mtimeMs: 1000 }] };
+  const wt = { slug: '-dev-clio--claude-worktrees-release-v1', id: 'b', files: [{ rel: '-dev-clio--claude-worktrees-release-v1/b.jsonl', size: 10, mtimeMs: 1000 }] };
+  await mergeSessions(s, [main, wt], async () => ({ ...fakeSession(OCT), project: { name: 'clio' } }));
+  const ids = Object.values(s.months['2026-10'].sessions).map((x) => x.project.id);
+  assert.deepEqual(ids, [hash('-dev-clio'), hash('-dev-clio')]);
+});

@@ -35,8 +35,9 @@ export async function mergeSessions(store, entries, read, onProgress) {
       let m = null;
       if (s) {
         // Projet : clé = dossier sous ~/.claude/projects, haché comme les clés de session ; le nom vient du
-        // lecteur (spec projets § 3.2).
-        s.project = { id: hash(e.slug), ...s.project };
+        // lecteur (spec projets § 3.2). Un worktree de Claude Code a son propre dossier
+        // (<projet>--claude-worktrees-<x>) : il est ramené à celui de son projet (§ 3.1).
+        s.project = { id: hash(e.slug.replace(/--claude-worktrees-.*$/, '')), ...s.project };
         for (const n of Object.values(s.ignored)) ignored += n;
         m = monthOf(s.start);
         (await store.month(m)).sessions[key] = s;

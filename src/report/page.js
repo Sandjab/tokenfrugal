@@ -80,7 +80,7 @@ export function renderReport(data, onRender = null) {
 function selectSessions() {
   SESSIONS = state.project === 'all' ? ALL : ALL.filter((s) => projectKey(s.project?.id ?? null) === state.project);
   WEEKS = weekly(SESSIONS);
-  RECOS = recommend(SESSIONS, LAST);
+  RECOS = recommend(SESSIONS, LAST, HYP);
 }
 function chooseProject(key) {
   state.project = key;

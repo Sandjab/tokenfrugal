@@ -1,8 +1,8 @@
 // src/model/recommend.js — leviers classés selon ce qu'ils auraient fait gagner sur les 4 semaines
 // qui précèdent le dernier tour relevé (spec § 7.5). Le cache 1 h n'y figure pas : rien ne garantit
 // qu'on puisse l'activer dans Claude Code. T du levier pause : celui mesuré d'après le TTL du cache.
-// La page donne `last` quand elle restreint les sessions à un projet : la fenêtre reste celle de tout
-// l'historique (spec projets § 5.1).
+// La page donne `last` et `hyp` quand elle restreint les sessions à un projet : la fenêtre et les
+// hypothèses mesurées (R, S, T) restent celles de tout l'historique (spec projets § 5.1).
 import { whatIf, measuredDefaults, DEFAULTS } from './whatif.js';
 
 const WEEK = 7 * 86_400;
@@ -17,10 +17,10 @@ function lastTurnOf(sessions) {
   return last;
 }
 
-export function recommend(sessions, last = lastTurnOf(sessions)) {
+export function recommend(sessions, last = lastTurnOf(sessions), hyp = measuredDefaults(sessions)) {
   if (last === -Infinity) return [];
   const range = { from: last - 4 * WEEK, to: last + 1 };
-  const { R, S, pauseSwitchMin } = measuredDefaults(sessions);
+  const { R, S, pauseSwitchMin } = hyp;
   const out = [];
   for (const [lever, params] of Object.entries({ ...LEVERS, pause: { pauseSwitchMin } })) {
     const r = whatIf(sessions, { R, S, P: DEFAULTS.P, ...params }, range);
