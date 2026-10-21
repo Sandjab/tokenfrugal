@@ -1,10 +1,11 @@
 // src/report/page.js — rendu du rapport dans le navigateur (spec v1 § 8, spec web § 4) : données
 // embarquées (CLI) ou issues de l'analyse faite dans la page ; calcule avec src/model.
 import { priceFor } from '../model/pricing.js';
-import { isoWeek, median, weekStart } from '../model/util.js';
-import { weekly, mergeWeeks, trendWeeks } from '../model/metrics.js';
+import { median, weekStart } from '../model/util.js';
+import { weekly, mergeWeeks, trendWeeks, weeksIn } from '../model/metrics.js';
 import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
+import { byProject, projectLabels } from '../model/projects.js';
 import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, setLang, getLang, pickLang } from './strings.js';
 
 const LANG_KEY = 'tokenfrugal-lang';
@@ -17,7 +18,9 @@ const SLIDERS = [
   { key: 'P', min: 0, max: 100_000, step: 1_000, hyp: true },
 ];
 // Rapport affiché : données et calculs fixés par renderReport.
-let DATA, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, state, afterRender = null;
+// ALL : toutes les sessions ; SESSIONS : celles du projet choisi, dont partent les calculs (spec projets § 5.1).
+let DATA, ALL, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, PROJECTS, LABELS, state, afterRender = null;
+let projectRows = null;   // { period, rows } : le tableau « Par projet » ne dépend que de la période
 const charts = new Map();
 let pending = false;
 // Derniers résultats gardés : ils portent les deux unités, et ni la bascule d'unité ni le changement
@@ -33,6 +36,9 @@ const ratio = (a, b) => (val(b) ? val(a) / val(b) : 0);
 const fmtSlider = (key, v) => (key === 'pauseSwitchMin' ? `${v} min` : fmtTok(v));
 const rows = (pairs) => pairs.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('');
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+// Valeur d'option d'un projet : son id, « none » pour les sessions sans projet.
+const projectKey = (id) => id ?? 'none';
+const labelOf = (id) => (id === null ? T.unknownProject : LABELS.get(id));
 
 // Langue : choix enregistré dans ce navigateur, sinon langue des données, sinon du navigateur.
 export function initLang(dataLang) {
@@ -55,14 +61,30 @@ export function bindLangSwitch(onChange) {
 
 export function renderReport(data, onRender = null) {
   DATA = data;
-  SESSIONS = data.sessions;
-  WEEKS = weekly(SESSIONS);
-  HYP = measuredDefaults(SESSIONS);
-  RECOS = recommend(SESSIONS);
-  LAST = SESSIONS.reduce((m, s) => Math.max(m, s.t.length ? s.t[s.t.length - 1] : 0), 0);
+  ALL = data.sessions;
+  // Habitudes (R, S, T) et dernier tour relevés sur toutes les sessions, même quand un projet est choisi.
+  HYP = measuredDefaults(ALL);
+  LAST = ALL.reduce((m, s) => Math.max(m, s.t.length ? s.t[s.t.length - 1] : 0), 0);
+  PROJECTS = byProject(ALL);
+  LABELS = projectLabels(PROJECTS);
+  projectRows = null;
   OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
-  state = { unit: 'usd', period: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
+  state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
   afterRender = onRender;
+  selectSessions();
+  resetResults();
+  renderAll();
+}
+
+// Sessions du projet choisi : toute la page en part, sauf le bloc « Par projet » et la qualité de lecture.
+function selectSessions() {
+  SESSIONS = state.project === 'all' ? ALL : ALL.filter((s) => projectKey(s.project?.id ?? null) === state.project);
+  WEEKS = weekly(SESSIONS);
+  RECOS = recommend(SESSIONS, LAST);
+}
+function chooseProject(key) {
+  state.project = key;
+  selectSessions();
   resetResults();
   renderAll();
 }
@@ -81,6 +103,7 @@ function renderAll() {
   renderHeader();
   renderSummary();
   renderHistory();
+  renderProjects();
   renderIndicators();
   buildWhatIf();
   if (lastWhatIf) showWhatIf(); else updateWhatIf();
@@ -98,10 +121,7 @@ function range() {
   return n ? { from: weekStart(LAST, n - 1), to: LAST + 1 } : {};
 }
 function periodWeeks() {
-  const r = range();
-  if (r.from === undefined) return WEEKS;
-  const k = isoWeek(r.from);
-  return WEEKS.filter((w) => w.week >= k);
+  return weeksIn(WEEKS, range());
 }
 function params() {
   const p = { cache1h: state.cache1h };
@@ -144,12 +164,14 @@ function plot(id, xLabel, labels, series) {
 
 function renderHeader() {
   $('controls').innerHTML = `
+    <label>${T.project} <select id="project"><option value="all"${state.project === 'all' ? ' selected' : ''}>${T.allProjects}</option>${PROJECTS.map((p) => `<option value="${esc(projectKey(p.id))}"${projectKey(p.id) === state.project ? ' selected' : ''}>${esc(labelOf(p.id))}</option>`).join('')}</select></label>
     <label>${T.period} <select id="period">${Object.entries(T.periods).map(([k, v]) => `<option value="${k}"${k === state.period ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     <span role="group" aria-label="${T.unit}">
       ${['usd', 'wtok'].map((u) => `<button id="unit-${u}" aria-pressed="${u === state.unit}">${T.units[u]}</button>`).join('')}
     </span>
     ${langSwitchHtml()}`;
   $('period').onchange = (e) => { state.period = e.target.value; resetResults(); renderAll(); };
+  $('project').onchange = (e) => chooseProject(e.target.value);
   for (const u of ['usd', 'wtok']) {
     $(`unit-${u}`).onclick = () => {
       state.unit = u;
@@ -181,6 +203,27 @@ function renderHistory() {
       <td>${w.clearSessions}</td><td>${med(w.socleFirstCtx)}</td></tr>`).join('')}
     </tbody></table></div>`;
   plot('ch-history', T.axisWeek, ws.map((w) => w.week), [{ label: T.cost, values: ws.map((w) => val(w.cost)) }]);
+}
+
+// Comparaison des projets sur la période choisie, toujours tous les projets (spec projets § 5.2). Recalculée
+// seulement quand la période change : ni l'unité ni la langue ne la refont.
+function renderProjects() {
+  if (projectRows?.period !== state.period) projectRows = { period: state.period, rows: byProject(ALL, range()) };
+  const rs = projectRows.rows, total = { usd: 0, wtok: 0 };
+  for (const p of rs) { total.usd += p.cost.usd; total.wtok += p.cost.wtok; }
+  $('projects').innerHTML = `<h2>${T.projects}</h2>
+    <div class="scroll"><table><thead><tr>${T.projectCols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${rs.map((p) => {
+      const key = esc(projectKey(p.id)), on = projectKey(p.id) === state.project;
+      return `<tr data-project="${key}"${on ? ' class="selected"' : ''}>
+      <th scope="row"><button type="button" class="project-pick" aria-pressed="${on}">${esc(labelOf(p.id))}</button></th>
+      <td>${money(p.cost)}</td><td>${fmtShare(ratio(p.cost, total))}</td><td>${p.sessions}</td><td>${p.turns}</td>
+      <td>${p.socleMedian ? fmtTok(p.socleMedian) : '—'}</td><td>${fmtShare(ratio(p.costOver150k, p.cost))}</td>
+      <td>${money(p.rebuildExcess)}</td><td>${fmtShare(ratio(p.subCost, p.cost))}</td></tr>`;
+    }).join('')}
+    </tbody></table></div>
+    <p class="note">${T.projectsNote}</p>`;
+  for (const tr of $('projects').querySelectorAll('tr[data-project]')) tr.onclick = () => chooseProject(tr.dataset.project);
 }
 
 function renderIndicators() {
@@ -315,11 +358,11 @@ function showSweep() {
 
 function renderQuality() {
   const ignored = {};
-  for (const s of SESSIONS) for (const [k, n] of Object.entries(s.ignored || {})) ignored[k] = (ignored[k] || 0) + n;
-  const stale = SESSIONS.filter((s) => s.analyzer !== DATA.analyzer).length;
-  const unpriced = [...new Set(SESSIONS.flatMap((s) => s.models))].filter((m) => !priceFor(m));
+  for (const s of ALL) for (const [k, n] of Object.entries(s.ignored || {})) ignored[k] = (ignored[k] || 0) + n;
+  const stale = ALL.filter((s) => s.analyzer !== DATA.analyzer).length;
+  const unpriced = [...new Set(ALL.flatMap((s) => s.models))].filter((m) => !priceFor(m));
   $('quality').innerHTML = `<h2>${T.quality}</h2><table>${rows([
-    [T.q.sessions, SESSIONS.length],
+    [T.q.sessions, ALL.length],
     [T.q.stale, stale],
     [T.q.unpriced, unpriced.length ? unpriced.map(esc).join(', ') : '—'],
     ...Object.entries(ignored).sort((a, b) => b[1] - a[1]).map(([k, n]) => [T.q.ignored(esc(k)), n]),
@@ -330,6 +373,7 @@ function renderQuality() {
 function renderUnit() {
   renderSummary();
   renderHistory();
+  renderProjects();
   renderIndicators();
   showWhatIf();
   showSweep();

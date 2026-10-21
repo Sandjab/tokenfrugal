@@ -156,3 +156,9 @@ test('fin d’analyse : « Préparation du rapport… » affiché pendant le cal
   await expect(page.locator('#report')).toBeVisible();
   expect(await page.evaluate(() => window.__seen)).toContain('Préparation du rapport…');
 });
+
+test('le web nomme le projet comme le CLI : dossier du cwd', async ({ page }) => {
+  const main = [user({ t: T0, cwd: '/home/u/gamma' }), ...sessionLines(T0).slice(1)];
+  await analyze(page, writeProjects({ 'p-gamma': { s1: { main } } }));
+  await expect(page.locator('#projects tbody th')).toHaveText('gamma');
+});

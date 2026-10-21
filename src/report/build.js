@@ -48,6 +48,7 @@ export function csp(scripts) {
 const SECTIONS = `<main>
 <section id="summary"></section>
 <section id="history"></section>
+<section id="projects"></section>
 <section id="indicators"></section>
 <section id="whatif"></section>
 <section id="quality"></section>

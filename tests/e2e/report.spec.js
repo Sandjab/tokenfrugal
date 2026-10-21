@@ -6,8 +6,9 @@ import { collect, loadSessions } from '../../src/store/store.js';
 import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
 import { T0, writeProjects, tmpStore, assistant, user } from '../helpers/logs.js';
+import { session } from '../helpers/model.js';
 
-let fullUrl, emptyUrl, weeksUrl, bigUrl;
+let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -50,6 +51,23 @@ test.beforeAll(async () => {
   bigUrl = pathToFileURL(bigFile).href;
   fullUrl = pathToFileURL(full).href;
   emptyUrl = pathToFileURL(empty).href;
+  // Deux projets : alpha (deux sessions chères, semaine du relevé) et un projet au nom piégé, 10 semaines plus tôt.
+  const proj = (cwd, t, cw) => ({ main: [user({ t, cwd }), assistant({ t: t + 5, input: 10, cw, output: 100 }), assistant({ t: t + 65, input: 10, cr: cw, cw: 1_000, output: 100 })] });
+  const storeP = tmpStore();
+  await collect({
+    projectsDir: writeProjects({
+      'p-alpha': { a1: proj('/home/u/alpha', T0, 200_000), a2: proj('/home/u/alpha', T0 + 3600, 200_000) },
+      'p-trap': { b1: proj('/home/u/a<b>&"c', T0 - 70 * 86_400, 30_000) },
+    }),
+    storeDir: storeP,
+  });
+  const projFile = path.join(storeP, 'report.html');
+  writeFileSync(projFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeP) }));
+  projUrl = pathToFileURL(projFile).href;
+  // Historique antérieur : session sans projet.
+  const legacyFile = path.join(tmpStore(), 'report.html');
+  writeFileSync(legacyFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: [session([{ t: T0, in: 10, cw: 30_000 }])] }));
+  legacyUrl = pathToFileURL(legacyFile).href;
 });
 
 test('aucune requête réseau, aucune erreur JavaScript', async ({ page }) => {
@@ -240,4 +258,50 @@ test('légende des graphiques : axe horizontal nommé et valeur survolée lisibl
   await page.click('#lang-en');
   await expect(page.locator('#ch-history .u-legend')).toContainText('Week');
   for (const id of ['ch-history', 'ch-whatif', 'ch-sweep']) await expect(page.locator(`#${id} .u-legend`)).not.toContainText('Value');
+});
+
+test('par projet : trié par coût ; choisir un projet change le total ; le tableau, lui, ne se filtre pas', async ({ page }) => {
+  await page.goto(projUrl);
+  const rows = page.locator('#projects tbody tr');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('th')).toHaveText('alpha');
+  const all = await page.locator('#summary .big').textContent();
+  await page.selectOption('#project', { label: 'a<b>&"c' });
+  await expect(page.locator('#summary .big')).not.toHaveText(all);
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toHaveClass(/selected/);
+});
+
+test('par projet : cliquer une ligne choisit ce projet dans le sélecteur', async ({ page }) => {
+  await page.goto(projUrl);
+  await page.locator('#projects tbody tr').nth(0).click();
+  await expect(page.locator('#project option:checked')).toHaveText('alpha');
+  await expect(page.locator('#projects tbody tr').nth(0)).toHaveClass(/selected/);
+});
+
+test('nom de projet avec < & " : affiché tel quel, jamais interprété comme du HTML', async ({ page }) => {
+  await page.goto(projUrl);
+  await expect(page.locator('#projects tbody th', { hasText: 'a<b>&"c' })).toHaveCount(1);
+  await expect(page.locator('#projects b, #controls b')).toHaveCount(0);
+});
+
+test('projet inactif sur la période : total à 0, aucune erreur, tableau limité aux projets actifs', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(projUrl);
+  await page.selectOption('#period', 'w4');
+  await expect(page.locator('#projects tbody tr')).toHaveCount(1);
+  await page.selectOption('#project', { label: 'a<b>&"c' });
+  await expect(page.locator('#summary .big')).toHaveText(/^0,00\s\$$/);
+  expect(errors).toEqual([]);
+});
+
+test('historique antérieur sans projet : ligne « Projet inconnu », sélectionnable', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(legacyUrl);
+  await expect(page.locator('#projects tbody th')).toHaveText('Projet inconnu');
+  await page.selectOption('#project', { label: 'Projet inconnu' });
+  await expect(page.locator('#summary .big')).not.toHaveText(/^0,00/);
+  expect(errors).toEqual([]);
 });

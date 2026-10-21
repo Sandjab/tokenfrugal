@@ -53,3 +53,6 @@ kbd, code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; backgroun
 progress { width: 100%; }
 .warn { color: var(--series-2); }
 #toolbar { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+tr[data-project] { cursor: pointer; }
+tr.selected th, tr.selected td { background: var(--card); font-weight: 600; }
+.project-pick { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
