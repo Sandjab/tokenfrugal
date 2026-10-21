@@ -35,6 +35,7 @@ and writes `~/.tokenfrugal/report.html`. Other commands:
 - A what-if that replays your sessions with other habits (fixed base trimmed, switching at a context
   threshold, switching before long breaks) and ranks the levers by what they would have saved.
 - Cost and key indicators by project, with a selector that narrows the whole report to one project.
+- Tool outputs: carried cost by tool (each output is paid again on every later turn until compaction), file rereads, and two what-if levers: capping text outputs and shrinking screenshots.
 
 Costs are shown in API-equivalent dollars and in weighted tokens (each token weighted by its price
 ratio). Anthropic does not publish how subscription limits count tokens, so weighted tokens are an

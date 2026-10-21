@@ -5,7 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { T0, writeProjects, tmpStore, assistant, user, toolResult, compact } from './helpers/logs.js';
+import { T0, writeProjects, tmpStore, assistant, user, toolResult, compact, assistantTool, toolResults } from './helpers/logs.js';
+import { png } from './helpers/images.js';
 
 test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans le stockage et la page', () => {
   const projects = writeProjects({
@@ -15,6 +16,8 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
           user({ t: T0, text: 'SENTINELLE-TEXTE-HUMAIN', cwd: '/home/sentinelle-cwd/Projet-Permis' }),
           assistant({ t: T0 + 5, input: 10, cw: 20_000, text: 'SENTINELLE-TEXTE-MODELE' }),
           toolResult({ t: T0 + 6, content: 'SENTINELLE-SORTIE-OUTIL' }),
+          assistantTool({ t: T0 + 8, id: 'msg_lu', input: 10, cr: 20_000, uses: [['lu1', 'Read', { file_path: '/home/sentinelle-fichier/lu.png' }]] }),
+          toolResults({ t: T0 + 9, results: [['lu1', [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: `${png(10, 10)}SENTINELLEAA` } }]]] }),
           assistant({ t: T0 + 10, input: 10, cr: 20_000, cw: 500, model: 'sentinelle modèle avec espaces' }),
           JSON.stringify({ type: 'sentinelle-type avec espaces' }),
           compact({ t: T0 + 20, pre: 20_510, post: 3_000 }),
@@ -39,4 +42,7 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
   for (const f of ['report.html', 'history-export.json', files.find((x) => x.startsWith('turns-'))]) {
     assert.ok(readFileSync(path.join(store, f), 'utf8').includes('Projet-Permis'), `${f} ne contient pas le nom du projet`);
   }
+  // Les sorties sont bien relevées (le nom d'outil est stocké) : sans cela, l'absence du chemin et du base64 ne prouverait rien.
+  const turns = readFileSync(path.join(store, files.find((x) => x.startsWith('turns-'))), 'utf8');
+  assert.ok(turns.includes('"Read"'), 'la sortie Read n’a pas été relevée');
 });
