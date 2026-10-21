@@ -3,7 +3,10 @@
 // Version 2 : les lignes sont coupées sur « \n » seulement (U+2028 / U+2029 ne coupent plus un enregistrement).
 // Version 3 : nom du projet (dossier du cwd), spec projets § 3. Chaque changement de version fait relire
 // une fois les sessions dont les journaux existent encore.
-export const ANALYZER_VERSION = 3;
+// Version 4 : sorties d'outils (outil, tokens estimés, image, fichier relu), spec sorties d'outils § 3.
+import { imageSize, imageTier, imageTokens } from './image.js';
+
+export const ANALYZER_VERSION = 4;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
@@ -31,6 +34,14 @@ export function projectNameOf(cwd) {
   return name && PROJECT_RE.test(name) ? name : '?';
 }
 
+// Nom d'outil : format strict (aucun texte libre) ; un outil MCP est regroupé par serveur.
+const TOOL_RE = /^[A-Za-z0-9_.-]{1,80}$/;
+export function toolNameOf(name) {
+  if (typeof name !== 'string') return '?';
+  const n = name.startsWith('mcp__') ? `mcp__${name.split('__')[1]}` : name;
+  return TOOL_RE.test(n) ? n : 'other';
+}
+
 const num = (x) => (Number.isFinite(x) && x > 0 ? Math.round(x) : 0);
 
 export class SessionReader {
@@ -43,6 +54,11 @@ export class SessionReader {
     this.kind = 'main';
     this.byKey = new Map();
     this.projectName = undefined;   // premier cwd du fichier principal (spec projets § 3.1)
+    // Sorties d'outils du fichier principal (spec sorties d'outils § 3) ; chemins gardés en mémoire seulement.
+    this.toolNames = new Map();   // id de tool_use → nom d'outil
+    this.toolFiles = new Map();   // id d'un Read → numéro de fichier
+    this.files = new Map();       // chemin → numéro de fichier, jamais stocké
+    this.outputs = [];            // { next, tool, file, chars } ou { next, tool, file, size }
   }
 
   beginFile(kind) {
@@ -70,11 +86,39 @@ export class SessionReader {
 
   // /clear ouvre un nouveau fichier ; la commande précède le premier tour (brief, formats observés).
   #user(o) {
-    if (this.kind !== 'main' || this.sawMainTurn || this.clearStart) return;
+    if (this.kind !== 'main') return;
     const c = o.message && o.message.content;
+    if (Array.isArray(c)) for (const b of c) if (b && b.type === 'tool_result') this.#toolResult(b);
+    if (this.sawMainTurn || this.clearStart) return;
     const text = typeof c === 'string' ? c
       : Array.isArray(c) ? c.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n') : '';
     if (CLEAR_RE.test(text)) this.clearStart = true;
+  }
+
+  // Sortie rattachée au prochain tour lu (next), pas à l'heure : le tour qui l'a demandée peut porter la
+  // même seconde. Un tool_result mêlé donne une sortie texte (somme des textes) et une sortie par image.
+  #toolResult(b) {
+    const tool = this.toolNames.get(b.tool_use_id) ?? '?';
+    const file = this.toolFiles.get(b.tool_use_id) ?? -1;
+    const next = this.turns.length;
+    const parts = typeof b.content === 'string' ? [{ type: 'text', text: b.content }] : Array.isArray(b.content) ? b.content : [];
+    let chars = 0, text = false;
+    for (const p of parts) {
+      if (p && p.type === 'text' && typeof p.text === 'string') { chars += p.text.length; text = true; }
+      else if (p && p.type === 'image') this.outputs.push({ next, tool, file, size: imageSize(p.source && p.source.data) });
+    }
+    if (text) this.outputs.push({ next, tool, file, chars });
+  }
+
+  #toolUses(content) {
+    for (const b of content) {
+      if (!b || b.type !== 'tool_use' || typeof b.id !== 'string') continue;
+      this.toolNames.set(b.id, toolNameOf(b.name));
+      const fp = b.name === 'Read' && b.input && typeof b.input.file_path === 'string' ? b.input.file_path : '';
+      if (!fp) continue;
+      if (!this.files.has(fp)) this.files.set(fp, this.files.size);
+      this.toolFiles.set(b.id, this.files.get(fp));
+    }
   }
 
   #compact(o, ts) {
@@ -89,6 +133,7 @@ export class SessionReader {
     const m = o.message;
     if (!m || typeof m !== 'object') { this.#ignore('assistant-no-message'); return; }
     if (m.model === '<synthetic>') return;   // écrit par Claude Code, pas par un modèle
+    if (this.kind === 'main' && Array.isArray(m.content)) this.#toolUses(m.content);
     if (!m.usage || typeof m.usage !== 'object') { this.#ignore('assistant-no-usage'); return; }
     if (Number.isNaN(ts)) { this.#ignore('no-timestamp'); return; }
     if (this.kind === 'main') this.sawMainTurn = true;
@@ -128,6 +173,21 @@ export class SessionReader {
       s.in.push(x.input); s.out.push(x.output); s.cr.push(x.cr); s.cw.push(x.cw); s.cw1h.push(x.cw1h);
       s.sub.push(x.sub);
     }
+    // Sorties : le tour « next » est un tour principal lu après elles ; sans lui, aucun tour ne la repaie.
+    const order = new Map(turns.map((x, i) => [x, i]));
+    const tools = [], tIdx = new Map(), tr = { at: [], tool: [], tok: [], img: [], file: [], unsized: 0 };
+    for (const o of this.outputs) {
+      const turn = this.turns[o.next];
+      if (!turn || turn.sub) continue;
+      let tok;
+      if (o.chars !== undefined) tok = Math.ceil(o.chars / 4);
+      else if (o.size) tok = imageTokens(o.size.w, o.size.h, turn.model);
+      else { tok = imageTier(turn.model).cap; tr.unsized++; }
+      if (!tIdx.has(o.tool)) { tIdx.set(o.tool, tools.length); tools.push(o.tool); }
+      tr.at.push(order.get(turn)); tr.tool.push(tIdx.get(o.tool)); tr.tok.push(tok);
+      tr.img.push(o.chars === undefined ? 1 : 0); tr.file.push(o.file);
+    }
+    if (tr.at.length) { s.tools = tools; s.tr = tr; }
     return s;
   }
 }

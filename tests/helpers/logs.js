@@ -22,6 +22,17 @@ export const user = ({ t, text = 'bonjour', cwd = '/tmp/projet' }) =>
   JSON.stringify({ type: 'user', timestamp: iso(t), cwd, message: { role: 'user', content: text } });
 export const toolResult = ({ t, content }) =>
   JSON.stringify({ type: 'user', timestamp: iso(t), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content }] } });
+// Tour qui appelle des outils : uses = [[id, nom, entrée]].
+export function assistantTool({ uses, ...turn }) {
+  const o = JSON.parse(assistant(turn));
+  o.message.content = uses.map(([id, name, input = {}]) => ({ type: 'tool_use', id, name, input }));
+  return JSON.stringify(o);
+}
+// Sorties d'outils sur une ligne user : results = [[tool_use_id, contenu (chaîne ou blocs)]].
+export const toolResults = ({ t, results }) => JSON.stringify({
+  type: 'user', timestamp: iso(t),
+  message: { role: 'user', content: results.map(([id, content]) => ({ type: 'tool_result', tool_use_id: id, content })) },
+});
 export const compact = ({ t, trigger = 'auto', pre, post }) =>
   JSON.stringify({ type: 'system', subtype: 'compact_boundary', timestamp: iso(t), compactMetadata: { trigger, preTokens: pre, postTokens: post, durationMs: 80_000 } });
 export const clearLines = (t) => [

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionReader, projectNameOf } from '../src/read/session.js';
-import { T0, assistant, user, compact, clearLines } from './helpers/logs.js';
+import { SessionReader, projectNameOf, toolNameOf } from '../src/read/session.js';
+import { T0, assistant, user, compact, clearLines, assistantTool, toolResults } from './helpers/logs.js';
+import { png } from './helpers/images.js';
 
 function read(main, subs = []) {
   const r = new SessionReader();
@@ -98,4 +99,64 @@ test('projet : chemins Windows ; racine, nom trop long ou caractère de contrôl
   assert.equal(projectNameOf(`/x/${'a'.repeat(81)}`), '?');
   assert.equal(projectNameOf('/x/a\u0007b'), '?');
   assert.equal(projectNameOf('/x/a<b>&"c'), 'a<b>&"c');   // permis : la page échappe à l'affichage
+});
+
+test('sorties : chacune à son outil, rattachée au tour suivant même dans la même seconde (sinon payée un tour trop tôt)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', req: 'r1', input: 10, cw: 5_000, uses: [['u1', 'Bash'], ['u2', 'mcp__playwright__browser_click']] }),
+    toolResults({ t: T0, results: [['u1', 'x'.repeat(4_000)], ['u2', 'ok']] }),
+    assistant({ t: T0, id: 'm2', req: 'r2', input: 10, cr: 5_000, cw: 1_000 }),
+    toolResults({ t: T0 + 1, results: [['inconnu', 'abc']] }),
+    assistant({ t: T0 + 2, id: 'm3', req: 'r3', input: 10, cr: 6_000 }),
+  ]);
+  assert.deepEqual(s.tools, ['Bash', 'mcp__playwright', '?']);
+  assert.deepEqual(s.tr.at, [1, 1, 2]);
+  assert.deepEqual(s.tr.tool, [0, 1, 2]);
+  assert.deepEqual(s.tr.tok, [1_000, 1, 1]);
+  assert.deepEqual(s.tr.img, [0, 0, 0]);
+});
+
+test('relectures : un numéro de fichier propre à la session ; le chemin n’est jamais gardé', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['r1', 'Read', { file_path: '/secret/a.js' }], ['r2', 'Read', { file_path: '/secret/b.js' }]] }),
+    toolResults({ t: T0 + 1, results: [['r1', 'aaaa'], ['r2', 'bbbb']] }),
+    assistantTool({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, uses: [['r3', 'Read', { file_path: '/secret/a.js' }], ['b1', 'Bash', { command: 'ls' }]] }),
+    toolResults({ t: T0 + 3, results: [['r3', 'aaaa'], ['b1', 'x']] }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.tr.file, [0, 1, 0, -1]);
+  assert.ok(!JSON.stringify(s).includes('secret'));
+});
+
+test('images : tokens d’après les dimensions et le modèle du tour suivant ; illisible → plafond, compté', () => {
+  const img = (data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data } });
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['s1', 'Read', { file_path: '/x.png' }]] }),
+    toolResults({ t: T0 + 1, results: [['s1', [img(png(1920, 1080)), { type: 'text', text: 'abcd' }, img('pas-une-image')]]] }),
+    assistant({ t: T0 + 2, id: 'm2', model: 'claude-opus-4-6', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.tr.img, [1, 1, 0]);
+  assert.deepEqual(s.tr.tok, [1_560, 1_568, 1]);   // palier standard ; l'illisible compte au plafond
+  assert.deepEqual(s.tr.file, [0, 0, 0]);
+  assert.equal(s.tr.unsized, 1);
+});
+
+test('sorties d’un sous-agent, et sortie après le dernier tour principal : ignorées (aucun tour principal ne les repaie)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['u1', 'Bash']] }),
+    toolResults({ t: T0 + 1, results: [['u1', 'fin']] }),
+  ], [[
+    assistantTool({ t: T0 + 2, id: 'a1', input: 10, cw: 1_000, uses: [['u2', 'Bash']] }),
+    toolResults({ t: T0 + 3, results: [['u2', 'sous-agent']] }),
+    assistant({ t: T0 + 4, id: 'a2', input: 10, cr: 1_000 }),
+  ]]);
+  assert.equal(s.tr, undefined);
+  assert.equal(s.tools, undefined);
+});
+
+test('noms d’outil : MCP regroupé par serveur ; hors format → other (aucun texte libre stocké)', () => {
+  assert.equal(toolNameOf('mcp__plugin_playwright_playwright__browser_click'), 'mcp__plugin_playwright_playwright');
+  assert.equal(toolNameOf('Bash'), 'Bash');
+  assert.equal(toolNameOf('nom avec espaces'), 'other');
+  assert.equal(toolNameOf(undefined), '?');
 });
