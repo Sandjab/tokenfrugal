@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { recommend } from '../src/model/recommend.js';
 import { measuredDefaults } from '../src/model/whatif.js';
 import { recommendationText, fmtTok, fmtCost } from '../src/report/strings.js';
-import { session, near } from './helpers/model.js';
+import { session, near, withOutputs } from './helpers/model.js';
 
 const T = 1_792_000_000;
 // Contexte sous 150 k (le seuil par défaut ne joue pas), pause d'1 h avant le dernier tour.
@@ -74,4 +74,20 @@ test('hypothèses données (habitudes de toutes les sessions) : la recommandatio
   // T global de 120 min : la pause d'1 h de S n'est plus visée, le levier pause disparaît
   const hyp = { ...measuredDefaults([S]), pauseSwitchMin: 120 };
   assert.deepEqual(recommend([S], undefined, hyp).map((x) => x.lever), ['socle']);
+});
+
+test('plafond des sorties : recommandé quand une grosse sortie reste dans le contexte ; sans image, pas de levier image', () => {
+  const r = recommend([withOutputs(S, ['Bash'], [[1, 0, 20_000]])]);
+  const cap = r.find((x) => x.lever === 'textCap');
+  // 15 000 retirés : t1 du cache lu (1 500), t2 du cache écrit après la pause (18 750)
+  assert.ok(near(cap.perWeek.wtok, 20_250 / 4));
+  assert.deepEqual(cap.params, { textCap: 5_000 });
+  assert.ok(!r.some((x) => x.lever === 'imageCap'));
+});
+
+test('phrases des plafonds : chiffres calculés, gain dit optimiste', () => {
+  const pw = { usd: 3, wtok: 1 };
+  assert.equal(recommendationText({ lever: 'textCap', params: { textCap: 5_000 }, perWeek: pw }, 'usd'),
+    `Plafonner les sorties d’outils à ${fmtTok(5_000)} tokens (head, plages de lignes, filtres), gain optimiste : −${fmtCost(pw, 'usd')} par semaine`);
+  assert.match(recommendationText({ lever: 'imageCap', params: { imageCap: 1_568 }, perWeek: pw }, 'usd'), /^Réduire ou recadrer les captures d’écran \(≤ 1\s568 tokens/);
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { whatIf, measuredDefaults, NEUTRAL, FALLBACK, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../src/model/whatif.js';
-import { session, near } from './helpers/model.js';
+import { session, near, withOutputs } from './helpers/model.js';
 
 // Valeurs en tokens pondérés (opus-4-6) : entrée 1, cache lu 0,1, écrit 5 min 1,25, écrit 1 h 2, sortie 5.
 const T = 1_792_000_000;
@@ -276,4 +276,31 @@ test('T mesuré : cw1h plafonné à cw ; aucune écriture → part 0, T = 15', (
   assert.equal(ttl({ t: T, cw: 10_000, cw1h: 30_000 }, { t: T + 60, cw: 10_000 }).measured.cache1hShare, 0.5);
   const none = ttl({ t: T, in: 10 });
   assert.deepEqual([none.measured.cache1hShare, none.pauseSwitchMin], [0, 15]);
+});
+
+test('plafond texte : une sortie de 20 000 tokens plafonnée à 5 000 retire 15 000 du contexte des tours suivants', () => {
+  const s = withOutputs(A, ['Bash'], [[1, 0, 20_000]]);
+  const r = whatIf([s], { textCap: 5_000 });
+  // t1 : 15 000 retirés du cache lu → 10 + 2 500 + 37 500 = 40 010 ; t2 : 10 + 5 500 + 12 500 = 18 010
+  assert.ok(near(r.sim.wtok, 50_010 + 40_010 + 18_010));
+  assert.equal(whatIf([s], { imageCap: 1_000 }).sim.wtok, r.real.wtok);   // une sortie texte ignore le plafond des images
+});
+
+test('plafond images : une image de 4 784 tokens ramenée à 1 568 retire 3 216 tokens des tours suivants', () => {
+  const r = whatIf([withOutputs(A, ['Read'], [[1, 0, 4_784, 1]])], { imageCap: 1_568 });
+  assert.ok(near(r.real.wtok - r.sim.wtok, 2 * 321.6));   // 3 216 de cache lu en moins, deux tours
+});
+
+test('plafonds neutres sur une session avec sorties : simulé = réel corrigé (sinon le what-if ment)', () => {
+  const r = whatIf([withOutputs(A, ['Bash', 'Read'], [[1, 0, 20_000], [2, 1, 4_000, 1]])], NEUTRAL);
+  assert.equal(r.sim.wtok, r.real.wtok);
+  assert.equal(r.sim.usd, r.real.usd);
+});
+
+test('plafond et bascule au seuil sur le même tour : la bascule repart de R + P et garde la réduction', () => {
+  const r = whatIf([withOutputs(A, ['Bash'], [[1, 0, 12_000]])], { ...HYP, threshold: 60_000, textCap: 5_000 });
+  // t1 : 70 010 − 7 000 = 63 010 > 60 000 → bascule (résumé 9 001), contexte 20 000 − 7 000 retirés de plus :
+  // 43 000 tout réécrits (53 747,5) ; t2 : 80 010 − 27 010 = 53 000, dont 42 990 lus (16 809)
+  assert.equal(r.switches, 1);
+  assert.ok(near(r.sim.wtok, 50_010 + 9_001 + 53_747.5 + 16_809));
 });

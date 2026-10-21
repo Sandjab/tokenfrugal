@@ -3,12 +3,15 @@
 // qu'on puisse l'activer dans Claude Code. T du levier pause : celui mesuré d'après le TTL du cache.
 // La page donne `last` et `hyp` quand elle restreint les sessions à un projet : la fenêtre et les
 // hypothèses mesurées (R, S, T) restent celles de tout l'historique (spec projets § 5.1).
+// Plafonds des sorties d'outils : gains optimistes, une sortie tronquée peut demander un appel de plus.
 import { whatIf, measuredDefaults, DEFAULTS } from './whatif.js';
 
 const WEEK = 7 * 86_400;
 export const LEVERS = {
   socle: { socleCut: DEFAULTS.socleCut },
   threshold: { threshold: DEFAULTS.threshold },
+  textCap: { textCap: DEFAULTS.textCap },
+  imageCap: { imageCap: DEFAULTS.imageCap },
 };   // + pause, à T mesuré (measuredDefaults)
 
 function lastTurnOf(sessions) {

@@ -3,10 +3,11 @@ import { partsOf, costOf } from './cost.js';
 import { ctxOf, median, isoWeek, zero, add, isRebuild, mainIndexes } from './util.js';
 
 // Leviers coupés : la simulation reproduit le réel corrigé.
-export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false };
+export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false, textCap: Infinity, imageCap: Infinity };
 // Valeurs par défaut des leviers, préréglage « tous les leviers » (spec § 7.5) ; P est une supposition.
 // pauseSwitchMin : valeur pour un cache de 5 min, et repli ; measuredDefaults la remplace selon le TTL mesuré.
-export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000 };
+// textCap, imageCap : plafonds des sorties d'outils (spec sorties d'outils § 4.2).
+export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000, textCap: 5_000, imageCap: 1_568 };
 // T quand les écritures en cache sont surtout en TTL 1 h : une pause de moins d'1 h ne casse pas le cache.
 export const PAUSE_SWITCH_MIN_1H = 60;
 // R et S quand rien ne permet de les mesurer.
@@ -87,6 +88,12 @@ export function whatIf(sessions, params = {}, range = {}) {
     let lastModel = null;
     const firstModel = s.t.map((_, i) => i).filter((i) => !s.sub[i] && costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), s.models[s.m[i]]))
       .map((i) => s.models[s.m[i]])[0] ?? null;
+    // Plafonds des sorties d'outils : tokens retirés du contexte simulé au tour où chaque sortie entre.
+    const cutAt = new Map();
+    if (s.tr) s.tr.at.forEach((at, k) => {
+      const cut = Math.max(0, s.tr.tok[k] - (s.tr.img[k] ? p.imageCap : p.textCap));
+      if (cut) cutAt.set(at, (cutAt.get(at) || 0) + cut);
+    });
     const bookCompaction = (e) => {
       const m = lastModel ?? firstModel;
       if (m) book(e.t, summaryCost(e.pre, e.post, m), summaryCost(Math.max(0, e.pre - delta - p.socleCut), e.post, m), false);
@@ -123,10 +130,14 @@ export function whatIf(sessions, params = {}, range = {}) {
       };
       // (1) pause : basculer à la fin du tour qui précède une longue pause
       if (prev && gap > p.pauseSwitchMin * 60 && prev.sim > reprise) doSwitch(prev.t);
+      // (1b) plafonds : les sorties arrivées avant ce tour comptent moins
+      const cut = cutAt.get(i) || 0;
+      delta += cut;
       let sim = Math.max(ctx - delta, s.in[i]);
-      // (2) seuil : basculer juste avant le tour qui le dépasse
+      // (2) seuil : basculer juste avant le tour qui le dépasse ; la bascule réapplique (1b)
       if (!switched && armed && prev && sim > p.threshold && reprise < p.threshold && prev.sim > reprise) {
         doSwitch(t);
+        delta += cut;
         sim = Math.max(ctx - delta, s.in[i]);
       }
       if (sim <= p.threshold) armed = true;
