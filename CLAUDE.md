@@ -21,8 +21,9 @@ GitHub Pages par `.github/workflows/pages.yml`. Specs : `docs/superpowers/specs/
 
 ## Règles héritées de CCTI
 
-- Tout reste local : aucune donnée ne quitte la machine. On ne garde que des compteurs, jamais une
-  ligne de conversation ni un chemin de fichier dans un export, et un test automatique le garantit.
+- Tout reste local : aucune donnée ne quitte la machine. On ne garde que des compteurs et le nom du
+  dossier de chaque projet, jamais une ligne de conversation ni un chemin de fichier dans un export,
+  et un test automatique le garantit.
 - Les docs publiques ne contiennent ni chiffres réels ni chemin du dossier personnel. Les chiffres
   réels vont dans `private/` (gitignoré).
 - Rien n'est publié (dépôt GitHub, posts, annonces) sans demande explicite de l'utilisateur, et

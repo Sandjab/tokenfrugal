@@ -97,7 +97,7 @@ export const STRINGS = {
       sessions: 'Sessions relevées', stale: 'Sessions lues par une ancienne version (journaux purgés)',
       unpriced: 'Modèles sans prix', ignored: (k) => `Lignes ignorées : ${k}`,
     },
-    privacy: 'Ce fichier contient le détail de vos tours (nombres et heures), sans texte ni chemin. Il reste sur votre machine.',
+    privacy: 'Ce fichier contient le détail de vos tours (nombres et heures) et le nom de vos projets, sans texte ni chemin. Il reste sur votre machine.',
     historyErrors: {
       'history-json': 'Fichier d’historique illisible', 'history-kind': 'Ce fichier n’est pas un historique tokenfrugal',
       'history-schema': 'Historique d’une version incompatible', 'history-shape': 'Historique incomplet ou abîmé',
@@ -133,7 +133,7 @@ export const STRINGS = {
       saveHistory: 'Enregistrer mon historique',
       another: 'Analyser un autre dossier',
       saveHint: 'Gardez ce fichier et redonnez-le à la prochaine visite : vous suivrez vos semaines au-delà de la purge des journaux.',
-      privacy: 'Cette page a analysé vos journaux dans votre navigateur ; rien n’a été envoyé. L’historique enregistré ne contient que des nombres et des heures, sans texte ni chemin.',
+      privacy: 'Cette page a analysé vos journaux dans votre navigateur ; rien n’a été envoyé. L’historique enregistré ne contient que des nombres, des heures et le nom de vos projets, sans texte ni chemin.',
     },
     cli: {
       usage: 'usage : tokenfrugal <collect|report|history> [--projects <dossier>] [--store <dossier>] [--no-collect] [--open] [--lang fr|en] [--export <fichier> | --import <fichier>]',
@@ -217,7 +217,7 @@ export const STRINGS = {
       sessions: 'Sessions recorded', stale: 'Sessions read by an older version (logs purged)',
       unpriced: 'Models without a price', ignored: (k) => `Ignored lines: ${k}`,
     },
-    privacy: 'This file holds the detail of your turns (numbers and times), with no text or path. It stays on your machine.',
+    privacy: 'This file holds the detail of your turns (numbers and times) and your project names, with no text or path. It stays on your machine.',
     historyErrors: {
       'history-json': 'Unreadable history file', 'history-kind': 'This file is not a tokenfrugal history',
       'history-schema': 'History from an incompatible version', 'history-shape': 'Incomplete or damaged history',
@@ -253,7 +253,7 @@ export const STRINGS = {
       saveHistory: 'Save my history',
       another: 'Analyse another folder',
       saveHint: 'Keep this file and give it back on your next visit: you will follow your weeks beyond the log purge.',
-      privacy: 'This page analysed your logs in your browser; nothing was sent. The saved history holds only numbers and times, with no text or path.',
+      privacy: 'This page analysed your logs in your browser; nothing was sent. The saved history holds only numbers, times and your project names, with no text or path.',
     },
     cli: {
       usage: 'usage: tokenfrugal <collect|report|history> [--projects <dir>] [--store <dir>] [--no-collect] [--open] [--lang fr|en] [--export <file> | --import <file>]',

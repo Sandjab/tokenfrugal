@@ -12,7 +12,7 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
     'Sentinelle-Projet-Slug': {
       'sentinelle-session-id': {
         main: [
-          user({ t: T0, text: 'SENTINELLE-TEXTE-HUMAIN', cwd: '/home/sentinelle-cwd/projet' }),
+          user({ t: T0, text: 'SENTINELLE-TEXTE-HUMAIN', cwd: '/home/sentinelle-cwd/Projet-Permis' }),
           assistant({ t: T0 + 5, input: 10, cw: 20_000, text: 'SENTINELLE-TEXTE-MODELE' }),
           toolResult({ t: T0 + 6, content: 'SENTINELLE-SORTIE-OUTIL' }),
           assistant({ t: T0 + 10, input: 10, cr: 20_000, cw: 500, model: 'sentinelle modèle avec espaces' }),
@@ -33,5 +33,10 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
     assert.ok(!/sentinelle/i.test(body), `${f} contient une chaîne-témoin`);
     assert.ok(!body.includes(homedir()), `${f} contient le dossier personnel`);
     assert.ok(!body.includes(projects), `${f} contient le chemin des journaux`);
+  }
+  // Le nom du dossier du projet est la seule partie du chemin permise (spec projets § 6) : il doit
+  // figurer là où on l'attend, sinon l'absence des chaînes-témoins ne prouverait rien.
+  for (const f of ['report.html', 'history-export.json', files.find((x) => x.startsWith('turns-'))]) {
+    assert.ok(readFileSync(path.join(store, f), 'utf8').includes('Projet-Permis'), `${f} ne contient pas le nom du projet`);
   }
 });

@@ -34,6 +34,7 @@ and writes `~/.tokenfrugal/report.html`. Other commands:
 - Compactions, `/clear` restarts, and the fixed base every session starts with.
 - A what-if that replays your sessions with other habits (fixed base trimmed, switching at a context
   threshold, switching before long breaks) and ranks the levers by what they would have saved.
+- Cost and key indicators by project, with a selector that narrows the whole report to one project.
 
 Costs are shown in API-equivalent dollars and in weighted tokens (each token weighted by its price
 ratio). Anthropic does not publish how subscription limits count tokens, so weighted tokens are an
@@ -41,8 +42,8 @@ estimate.
 
 ## Privacy
 
-Only numbers, times, model names and hashed identifiers are stored — never a line of conversation
-or a file path. An automated test checks this on the stored data, the history file and the pages.
+Only numbers, times, model names, project folder names and hashed identifiers are stored — never a
+line of conversation or a file path. An automated test checks this on the stored data, the history file and the pages.
 
 ## Development
 
