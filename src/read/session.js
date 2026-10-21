@@ -1,8 +1,9 @@
 // src/read/session.js — lit une session (fichier principal puis sous-agents) en tours et événements.
-// Ne garde que des nombres, des noms de modèle et des types de ligne (spec § 5).
-// Version 2 : les lignes sont coupées sur « \n » seulement (U+2028 / U+2029 ne coupent plus un enregistrement) ;
-// les sessions déjà stockées sont relues une fois pour récupérer les enregistrements perdus.
-export const ANALYZER_VERSION = 2;
+// Ne garde que des nombres, des noms de modèle, des types de ligne et le nom du dossier du projet (spec § 5).
+// Version 2 : les lignes sont coupées sur « \n » seulement (U+2028 / U+2029 ne coupent plus un enregistrement).
+// Version 3 : nom du projet (dossier du cwd), spec projets § 3. Chaque changement de version fait relire
+// une fois les sessions dont les journaux existent encore.
+export const ANALYZER_VERSION = 3;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
@@ -17,6 +18,18 @@ const MODEL_RE = /^[\w.:@\-[\]]{1,80}$/;
 const TYPE_RE = /^[a-z0-9_-]{1,40}$/i;
 const CLEAR_RE = /<command-name>\/clear<\/command-name>/;
 const FIELDS = ['input', 'output', 'cr', 'cw', 'cw1h'];
+// Nom de projet : même exigence de format que les noms de modèle, mais un dossier peut contenir des
+// espaces ou de la ponctuation ; seuls les séparateurs et les caractères de contrôle sont exclus.
+const PROJECT_RE = /^[^\/\\\u0000-\u001f\u007f]{1,80}$/;
+
+// Nom du projet : dernier segment du cwd ; un worktree de Claude Code (<projet>/.claude/worktrees/<x>)
+// est rattaché à <projet>. Seul ce nom sort du lecteur, jamais le chemin (spec projets § 3.1).
+export function projectNameOf(cwd) {
+  const segs = cwd.split(/[\\/]/).filter(Boolean);
+  const w = segs.findIndex((x, i) => x === '.claude' && segs[i + 1] === 'worktrees');
+  const name = w > 0 ? segs[w - 1] : segs.at(-1);
+  return name && PROJECT_RE.test(name) ? name : '?';
+}
 
 const num = (x) => (Number.isFinite(x) && x > 0 ? Math.round(x) : 0);
 
@@ -29,6 +42,7 @@ export class SessionReader {
     this.sawMainTurn = false;
     this.kind = 'main';
     this.byKey = new Map();
+    this.projectName = undefined;   // premier cwd du fichier principal (spec projets § 3.1)
   }
 
   beginFile(kind) {
@@ -43,6 +57,7 @@ export class SessionReader {
     let o;
     try { o = JSON.parse(line); } catch { this.#ignore('corrupt'); return; }
     if (!o || typeof o !== 'object') { this.#ignore('corrupt'); return; }
+    if (this.kind === 'main' && this.projectName === undefined && typeof o.cwd === 'string' && o.cwd) this.projectName = projectNameOf(o.cwd);
     const ts = typeof o.timestamp === 'string' ? Date.parse(o.timestamp) : NaN;
     switch (o.type) {
       case 'assistant': this.#assistant(o, ts); return;
@@ -105,6 +120,7 @@ export class SessionReader {
       analyzer: ANALYZER_VERSION, start: turns[0].t, clearStart: this.clearStart, models,
       t: [], m: [], in: [], out: [], cr: [], cw: [], cw1h: [], sub: [],
       events: [...this.events].sort((a, b) => a.t - b.t), ignored: { ...this.ignored },
+      project: this.projectName === undefined ? {} : { name: this.projectName },
     };
     for (const x of turns) {
       if (!idx.has(x.model)) { idx.set(x.model, models.length); models.push(x.model); }

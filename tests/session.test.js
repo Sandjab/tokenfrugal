@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionReader } from '../src/read/session.js';
+import { SessionReader, projectNameOf } from '../src/read/session.js';
 import { T0, assistant, user, compact, clearLines } from './helpers/logs.js';
 
 function read(main, subs = []) {
@@ -73,4 +73,29 @@ test('aucun texte de conversation dans le résultat', () => {
 
 test('session sans tour : null', () => {
   assert.equal(read([...clearLines(T0)]), null);
+});
+
+test('projet : nom du dossier du premier cwd du fichier principal, jamais le chemin (on ne garde que le nom)', () => {
+  const s = read([user({ t: T0, cwd: '/home/x/alpha' }), user({ t: T0 + 1, cwd: '/home/x/beta' }), assistant({ t: T0 + 2, input: 1 })]);
+  assert.deepEqual(s.project, { name: 'alpha' });
+  assert.ok(!JSON.stringify(s).includes('/home/x'));
+});
+
+test('projet : le cwd d’un sous-agent ne compte pas ; aucun cwd → pas de nom', () => {
+  const s = read([assistant({ t: T0, input: 1 })], [[user({ t: T0 + 1, cwd: '/x/sous-agent' }), assistant({ t: T0 + 2, input: 1 })]]);
+  assert.deepEqual(s.project, {});
+});
+
+test('projet : un worktree de Claude Code est rattaché à son projet, pas compté comme un projet à part', () => {
+  assert.equal(projectNameOf('/home/x/alpha/.claude/worktrees/feat-1'), 'alpha');
+  assert.equal(projectNameOf('/home/x/alpha/.claude/worktrees/feat-1/sous-dossier'), 'alpha');
+});
+
+test('projet : chemins Windows ; racine, nom trop long ou caractère de contrôle → « ? » (format strict)', () => {
+  assert.equal(projectNameOf('C:\\dev\\gamma'), 'gamma');
+  assert.equal(projectNameOf('/home/x/gamma/'), 'gamma');
+  assert.equal(projectNameOf('/'), '?');
+  assert.equal(projectNameOf(`/x/${'a'.repeat(81)}`), '?');
+  assert.equal(projectNameOf('/x/a\u0007b'), '?');
+  assert.equal(projectNameOf('/x/a<b>&"c'), 'a<b>&"c');   // permis : la page échappe à l'affichage
 });
