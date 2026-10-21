@@ -86,6 +86,14 @@ export function mergeWeeks(weeks) {
   return m;
 }
 
+// Semaines d'une fenêtre { from, to } (spec v1 § 8) : celles à partir de la semaine de `from`, toutes
+// sans `from`. La page et la répartition par projet découpent ainsi la même période.
+export function weeksIn(weeks, range = {}) {
+  if (range.from === undefined) return weeks;
+  const k = isoWeek(range.from);
+  return weeks.filter((w) => w.week >= k);
+}
+
 // Tendance (spec § 8) : la dernière semaine complète présente (celle de `generated` est en cours, donc
 // exclue) et la semaine calendaire d'avant ; null si celle-ci n'a pas de données. weeks : triées.
 export function trendWeeks(weeks, generated) {

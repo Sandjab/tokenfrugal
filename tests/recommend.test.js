@@ -63,3 +63,8 @@ test('cache 1 h : le levier pause est recommandé avec T = 60 min mesuré', () =
 test('cache 5 min (fixture S) : T reste 15 min', () => {
   assert.deepEqual(recommend([S]).find((x) => x.lever === 'pause').params, { pauseSwitchMin: 15 });
 });
+
+test('fenêtre ancrée sur le dernier tour donné : un projet inactif depuis 10 semaines n’a pas de recommandation', () => {
+  assert.deepEqual(recommend([S], T + 3660 + 10 * 7 * 86_400), []);
+  assert.deepEqual(recommend([S], T + 3660), recommend([S]));
+});
