@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeSessions, stampOf, monthOf } from '../src/store/merge.js';
+import { hash } from '../src/store/sha256.js';
 
 // Stockage en mémoire, comme celui du worker.
 function memStore() {
@@ -64,4 +65,21 @@ test('session illisible (read → undefined) : comptée à part, ni indexée ni 
   const again = await mergeSessions(s, [entry('a', 5000), entry('b')], async () => fakeSession(OCT));
   assert.equal(again.read, 2);
   assert.equal(again.unreadable, 0);
+});
+
+test('projet : id = hachage du dossier du projet ; même nom dans deux dossiers → deux id (deux clones du même dépôt)', async () => {
+  const s = memStore();
+  const e1 = { slug: 'p1', id: 'a', files: [{ rel: 'p1/a.jsonl', size: 10, mtimeMs: 1000 }] };
+  const e2 = { slug: 'p2', id: 'b', files: [{ rel: 'p2/b.jsonl', size: 10, mtimeMs: 1000 }] };
+  await mergeSessions(s, [e1, e2], async () => ({ ...fakeSession(OCT), project: { name: 'app' } }));
+  const byId = (a, b) => (a.id < b.id ? -1 : 1);
+  const stored = Object.values(s.months['2026-10'].sessions).map((x) => x.project);
+  assert.deepEqual(stored.sort(byId), [{ id: hash('p1'), name: 'app' }, { id: hash('p2'), name: 'app' }].sort(byId));
+  assert.ok(!JSON.stringify(stored).includes('p1'));   // le dossier n'apparaît que haché
+});
+
+test('projet : session sans nom (aucun cwd) → id seul', async () => {
+  const s = memStore();
+  await mergeSessions(s, [entry('a')], async () => fakeSession(OCT));
+  assert.deepEqual(Object.values(s.months['2026-10'].sessions)[0].project, { id: hash('p') });
 });

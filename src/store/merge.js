@@ -34,6 +34,9 @@ export async function mergeSessions(store, entries, read, onProgress) {
       if (prev && prev.month) { delete (await store.month(prev.month)).sessions[key]; store.touch(prev.month); }
       let m = null;
       if (s) {
+        // Projet : clé = dossier sous ~/.claude/projects, haché comme les clés de session ; le nom vient du
+        // lecteur (spec projets § 3.2).
+        s.project = { id: hash(e.slug), ...s.project };
         for (const n of Object.values(s.ignored)) ignored += n;
         m = monthOf(s.start);
         (await store.month(m)).sessions[key] = s;

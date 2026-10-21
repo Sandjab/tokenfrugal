@@ -21,3 +21,10 @@ test('refusés avec un code : autre type de fichier, autre schéma, contenu abî
   assert.throws(() => unpackHistory({ ...ok, months: { 'pas-un-mois': { sessions: {} } } }), /history-shape/);
   assert.throws(() => unpackHistory({ ...ok, index: {} }), /history-shape/);
 });
+
+test('le projet traverse l’export et la relecture ; une session sans projet (historique antérieur) passe aussi', () => {
+  const m = { '2026-10': { schema: 1, sessions: { k1: { analyzer: 3, start: 1, t: [1], project: { id: 'abcd', name: 'alpha' } }, k2: { analyzer: 2, start: 1, t: [1] } } } };
+  const back = unpackHistory(packHistory(index, m, 0));
+  assert.deepEqual(back.months['2026-10'].sessions.k1.project, { id: 'abcd', name: 'alpha' });
+  assert.equal(back.months['2026-10'].sessions.k2.project, undefined);
+});
