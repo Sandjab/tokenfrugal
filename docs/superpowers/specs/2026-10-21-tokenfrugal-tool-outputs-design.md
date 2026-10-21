@@ -21,7 +21,7 @@ dimensions, pas selon la longueur de son base64. Compter en caractères faussera
 | Question | Décision |
 |---|---|
 | Ambition | Mesure par outil, relectures, et deux leviers what-if qui entrent dans les recommandations. |
-| Tokens d'un texte | Caractères ÷ 4, présenté comme une estimation. |
+| Tokens d'un texte | Caractères ÷ 2,2 dès Claude 4.7, ÷ 2,8 avant (§ 3.3), présenté comme une estimation. |
 | Tokens d'une image | Dimensions lues dans l'en-tête, règle officielle d'Anthropic (§ 3.3). |
 | Coût d'une sortie | Coût « reporté » : part du coût du contexte de chaque tour où elle est présente (§ 4.1). |
 | Périmètre | Sessions principales. Les sous-agents sont exclus : leur travail revient dans la session principale comme sortie de l'outil `Agent`. Les images collées par l'utilisateur (hors `tool_result`) sont hors périmètre. |
@@ -32,7 +32,7 @@ dimensions, pas selon la longueur de son base64. Compter en caractères faussera
 
 - Fichier principal seulement. Une ligne `assistant` dont le contenu porte des blocs `tool_use` fait
   retenir, pour chaque bloc, `id → nom de l'outil`, et pour `Read` (`input.file_path` chaîne non vide)
-  `id → numéro de fichier`.
+  `id → numéro de plage lue`.
 - Une ligne `user` dont le contenu porte des blocs `tool_result` donne une sortie par bloc, à l'heure
   de la ligne. Outil inconnu (`tool_use_id` sans `tool_use` vu) : nom `?`.
 - Le contenu d'un `tool_result` est une chaîne ou une liste de blocs. Une chaîne et chaque bloc
@@ -44,14 +44,21 @@ dimensions, pas selon la longueur de son base64. Compter en caractères faussera
 
 - Nom gardé s'il respecte `^[A-Za-z0-9_.-]{1,80}$`, sinon `other`. Un nom `mcp__<serveur>__<outil>`
   devient `mcp__<serveur>` (regroupement par serveur).
-- Numéro de fichier : ordinal du `file_path` dans la session (0, 1, 2… dans l'ordre d'apparition).
-  Le chemin lui-même n'est ni gardé ni haché. Hors `Read` : −1.
-- Relecture : une sortie `Read` dont le numéro de fichier a déjà paru dans une sortie précédente de
-  la même session.
+- Numéro de plage lue (champ `file`) : ordinal de la plage (`file_path`, `offset`, `limit`, `pages`) dans
+  la session (0, 1, 2… dans l'ordre d'apparition). Le chemin lui-même n'est ni gardé ni haché. Hors
+  `Read` : −1.
+- Relecture : une sortie `Read` dont la plage a déjà été rendue à un tour principal précédent de la même
+  session. Une autre plage du même fichier est de la pagination, pas une relecture ; les sorties d'un
+  même `Read` (texte et images) ne sont pas des relectures l'une de l'autre. (Révisé le 21 oct. 2026 :
+  sur le corpus réel, les « relectures » par chemin seul étaient surtout de la pagination.)
 
 ### 3.3 Tokens
 
-- Texte : `ceil(caractères / 4)`.
+- Texte : `ceil(caractères / 2,2)` dès Claude 4.7 (même détection que le palier d'images ci-dessous,
+  nouveau tokenizer), `ceil(caractères / 2,8)` avant ; modèle du tour qui suit la sortie. Calibré le
+  21 oct. 2026 sur un corpus réel : tokens estimés comparés à la hausse du contexte mesurée entre deux
+  tours, sorties de plus de 1 000 tokens (chiffres dans `private/`). Le ÷ 4 initial sous-estimait
+  nettement.
 - Image : largeur et hauteur lues dans l'en-tête du base64 décodé (PNG : IHDR ; JPEG : premier
   segment SOF0 à SOF15 hors DHT/JPG/DAC ; GIF : écran logique ; WebP : VP8, VP8L, VP8X). Puis la règle
   de la doc Vision d'Anthropic (vérifiée le 21 oct. 2026) :
@@ -73,10 +80,11 @@ tools: [noms]                                  // noms d'outil, indexés par tr.
 tr: { at: [], tool: [], tok: [], img: [], file: [], unsized: n }
 ```
 
-- `at[k]` : indice (dans les colonnes triées de la session) du premier tour principal dont l'heure
-  est ≥ celle de la sortie ; sortie après le dernier tour : ignorée (elle n'est repayée par aucun
-  tour).
-- `img[k]` : 1 pour une image, 0 sinon. `file[k]` : numéro de fichier ou −1.
+- `at[k]` : indice (dans les colonnes triées de la session) du premier tour lu après la sortie dans le
+  fichier principal (pas d'après l'heure : le tour qui a demandé la sortie peut porter la même
+  seconde). Sortie après le dernier tour, ou suivie d'un compactage avant tout tour : ignorée (aucun
+  tour ne la repaie).
+- `img[k]` : 1 pour une image, 0 sinon. `file[k]` : numéro de plage lue ou −1.
 - Une session sans sortie n'a pas ces champs. Une session lue avant cette version non plus : elle
   compte comme sans sortie, et la page le dit (§ 5.1).
 - `ANALYZER_VERSION` passe de 3 à 4 ; `SCHEMA` reste 1.
@@ -116,8 +124,8 @@ la somme des réductions des sorties d'`at` = i ; (2) seuil — une bascule fixe
 `contexte précédent − (R + P)` puis réapplique (1b) ; (3) socle. Un compactage réel remet `delta` à 0
 comme aujourd'hui.
 
-Valeurs par défaut (préréglage « tous les leviers » et recommandations) : C = 5 000 tokens
-(≈ 20 000 caractères, le seuil du brief) ; images = 1 568 tokens (capture d'environ 1 456 × 819 px).
+Valeurs par défaut (préréglage « tous les leviers » et recommandations) : C = 9 000 tokens
+(≈ 20 000 caractères dès Claude 4.7, le seuil du brief) ; images = 1 568 tokens (capture d'environ 1 456 × 819 px).
 
 Invariant inchangé : leviers neutres, coût simulé = coût réel corrigé.
 
@@ -125,7 +133,7 @@ Invariant inchangé : leviers neutres, coût simulé = coût réel corrigé.
 
 `recommend` rejoue aussi `textCap` et `imageCap` seuls, aux valeurs par défaut, sur la même fenêtre.
 Phrases d'action :
-- « Plafonner les sorties d'outils à 5 k tokens (head, plages de lignes, filtres) »
+- « Plafonner les sorties d'outils à 9 k tokens (head, plages de lignes, filtres) »
 - « Réduire ou recadrer les captures d'écran (≤ 1 568 tokens, environ 1 456 × 819 px) »
 
 La page et le CLI précisent que ces deux gains sont **optimistes** : une sortie tronquée ou une image
@@ -137,9 +145,9 @@ réduite peut demander un appel de plus, non compté.
 
 - Nouvelle section `#tools`, après les indicateurs, sur la période et le projet choisis.
 - Colonnes : outil, sorties, tokens estimés, coût reporté, part du coût total de la période, sorties
-  texte de plus de 5 000 tokens (≈ 20 000 caractères). Les 12 premiers outils par coût, puis une
+  texte de plus de 9 000 tokens (≈ 20 000 caractères). Les 12 premiers outils par coût, puis une
   ligne « Autres outils ». Puis « dont images » et « dont relectures de fichiers ».
-- Note : tokens estimés (texte ÷ 4, images d'après leurs dimensions) ; sessions lues avant cette
+- Note : tokens estimés (texte d'après sa longueur, § 3.3 ; images d'après leurs dimensions) ; sessions lues avant cette
   version sans détail des sorties.
 
 ### 5.2 What-if
