@@ -4,7 +4,7 @@
 // Version 3 : nom du projet (dossier du cwd), spec projets § 3. Chaque changement de version fait relire
 // une fois les sessions dont les journaux existent encore.
 // Version 4 : sorties d'outils (outil, tokens estimés, image, fichier relu), spec sorties d'outils § 3.
-import { imageSize, imageTier, imageTokens } from './image.js';
+import { imageSize, imageTier, imageTokens, isClaude47Plus } from './image.js';
 
 export const ANALYZER_VERSION = 4;
 
@@ -42,6 +42,10 @@ export function toolNameOf(name) {
   return TOOL_RE.test(n) ? n : 'other';
 }
 
+// Tokens d'un texte : caractères par token calibrés sur des journaux réels (sorties de plus de 1 000 tokens,
+// 21 oct. 2026) : 2,2 dès Claude 4.7 (nouveau tokenizer), 2,8 avant. En dixièmes, pour un calcul exact.
+const textTokens = (chars, model) => Math.ceil((chars * 10) / (isClaude47Plus(model) ? 22 : 28));
+
 const num = (x) => (Number.isFinite(x) && x > 0 ? Math.round(x) : 0);
 
 export class SessionReader {
@@ -56,8 +60,8 @@ export class SessionReader {
     this.projectName = undefined;   // premier cwd du fichier principal (spec projets § 3.1)
     // Sorties d'outils du fichier principal (spec sorties d'outils § 3) ; chemins gardés en mémoire seulement.
     this.toolNames = new Map();   // id de tool_use → nom d'outil
-    this.toolFiles = new Map();   // id d'un Read → numéro de fichier
-    this.files = new Map();       // chemin → numéro de fichier, jamais stocké
+    this.toolFiles = new Map();   // id d'un Read → numéro de plage lue
+    this.files = new Map();       // plage lue (chemin, offset, limit, pages) → numéro, jamais stockée
     this.outputs = [];            // { next, tool, file, chars } ou { next, tool, file, size }
   }
 
@@ -116,8 +120,10 @@ export class SessionReader {
       this.toolNames.set(b.id, toolNameOf(b.name));
       const fp = b.name === 'Read' && b.input && typeof b.input.file_path === 'string' ? b.input.file_path : '';
       if (!fp) continue;
-      if (!this.files.has(fp)) this.files.set(fp, this.files.size);
-      this.toolFiles.set(b.id, this.files.get(fp));
+      // Une autre plage du même fichier est une lecture neuve (pagination), pas une relecture.
+      const key = JSON.stringify([fp, b.input.offset ?? null, b.input.limit ?? null, b.input.pages ?? null]);
+      if (!this.files.has(key)) this.files.set(key, this.files.size);
+      this.toolFiles.set(b.id, this.files.get(key));
     }
   }
 
@@ -182,7 +188,7 @@ export class SessionReader {
       const turn = this.turns[o.next];
       if (!turn || turn.sub) continue;
       let tok;
-      if (o.chars !== undefined) tok = Math.ceil(o.chars / 4);
+      if (o.chars !== undefined) tok = textTokens(o.chars, turn.model);
       else if (o.size) tok = imageTokens(o.size.w, o.size.h, turn.model);
       else { tok = imageTier(turn.model).cap; tr.unsized++; }
       if (!tIdx.has(o.tool)) { tIdx.set(o.tool, tools.length); tools.push(o.tool); }

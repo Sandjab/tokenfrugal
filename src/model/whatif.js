@@ -6,8 +6,8 @@ import { ctxOf, median, isoWeek, zero, add, isRebuild, mainIndexes } from './uti
 export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false, textCap: Infinity, imageCap: Infinity };
 // Valeurs par défaut des leviers, préréglage « tous les leviers » (spec § 7.5) ; P est une supposition.
 // pauseSwitchMin : valeur pour un cache de 5 min, et repli ; measuredDefaults la remplace selon le TTL mesuré.
-// textCap, imageCap : plafonds des sorties d'outils (spec sorties d'outils § 4.2).
-export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000, textCap: 5_000, imageCap: 1_568 };
+// textCap, imageCap : plafonds des sorties d'outils (spec sorties d'outils § 4.2) ; textCap ≈ 20 000 caractères.
+export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000, textCap: 9_000, imageCap: 1_568 };
 // T quand les écritures en cache sont surtout en TTL 1 h : une pause de moins d'1 h ne casse pas le cache.
 export const PAUSE_SWITCH_MIN_1H = 60;
 // R et S quand rien ne permet de les mesurer.

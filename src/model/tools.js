@@ -3,8 +3,8 @@
 import { partsOf, costOf } from './cost.js';
 import { ctxOf, mainIndexes, zero } from './util.js';
 
-// Sortie texte « grosse » : plus de 5 000 tokens, soit ≈ 20 000 caractères (seuil du brief).
-export const BIG_OUTPUT = 5_000;
+// Sortie texte « grosse » : plus de 9 000 tokens, soit ≈ 20 000 caractères dès Claude 4.7 (seuil du brief).
+export const BIG_OUTPUT = 9_000;
 const emptyRow = (tool) => ({ tool, n: 0, tok: 0, big: 0, cost: zero() });
 
 // range : { from, to } en secondes, ou {} pour tout. Une sortie est comptée au tour où elle entre ; son
@@ -17,12 +17,13 @@ export function toolCosts(sessions, range = {}) {
   const share = (r, c, f) => { r.cost.usd += c.usd * f; r.cost.wtok += c.wtok * f; };
   for (const s of sessions) {
     if (!s.tr) continue;
-    // Sorties regroupées par tour ; relecture = numéro de fichier déjà vu plus tôt dans la session.
-    const byTurn = new Map(), seen = new Set();
+    // Sorties regroupées par tour ; relecture = plage lue déjà rendue à un tour précédent de la session (les
+    // sorties d'un même Read, texte et images, arrivent au même tour).
+    const byTurn = new Map(), firstAt = new Map();
     s.tr.at.forEach((at, k) => {
       const f = s.tr.file[k];
-      const x = { tool: s.tools[s.tr.tool[k]], tok: s.tr.tok[k], img: s.tr.img[k] === 1, re: f >= 0 && seen.has(f) };
-      if (f >= 0) seen.add(f);
+      if (f >= 0 && !firstAt.has(f)) firstAt.set(f, at);
+      const x = { tool: s.tools[s.tr.tool[k]], tok: s.tr.tok[k], img: s.tr.img[k] === 1, re: f >= 0 && firstAt.get(f) !== at };
       if (!byTurn.has(at)) byTurn.set(at, []);
       byTurn.get(at).push(x);
     });

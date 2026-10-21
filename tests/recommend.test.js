@@ -79,9 +79,10 @@ test('hypothèses données (habitudes de toutes les sessions) : la recommandatio
 test('plafond des sorties : recommandé quand une grosse sortie reste dans le contexte ; sans image, pas de levier image', () => {
   const r = recommend([withOutputs(S, ['Bash'], [[1, 0, 20_000]])]);
   const cap = r.find((x) => x.lever === 'textCap');
-  // 15 000 retirés : t1 du cache lu (1 500), t2 du cache écrit après la pause (18 750)
-  assert.ok(near(cap.perWeek.wtok, 20_250 / 4));
-  assert.deepEqual(cap.params, { textCap: 5_000 });
+  // plafond par défaut 9 000 (≈ 20 000 caractères, seuil du brief) : 11 000 retirés, t1 du cache lu (1 100),
+  // t2 du cache écrit après la pause (13 750)
+  assert.ok(near(cap.perWeek.wtok, 14_850 / 4));
+  assert.deepEqual(cap.params, { textCap: 9_000 });
   assert.ok(!r.some((x) => x.lever === 'imageCap'));
 });
 

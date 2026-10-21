@@ -42,14 +42,17 @@ export function imageSize(b64) {
   return null;
 }
 
-// Palier haute résolution : Claude 4.7 et suivants, Fable et Mythos compris. Version lue dans l'identifiant
-// (« claude-opus-4-7 », « claude-sonnet-5 ») ; une date (« -20250514 ») n'est pas une version mineure.
-export function imageTier(model) {
+// Claude 4.7 et suivants, Fable et Mythos compris : palier d'images haute résolution et nouveau tokenizer.
+// Version lue dans l'identifiant (« claude-opus-4-7 », « claude-sonnet-5 ») ; une date (« -20250514 ») n'est
+// pas une version mineure.
+export function isClaude47Plus(model) {
   const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(String(model ?? ''));
-  if (!m) return TIERS.standard;
-  if (m[1] === 'fable' || m[1] === 'mythos') return TIERS.high;
-  return Number(m[2]) + Number(m[3] ?? 0) / 10 >= 4.7 ? TIERS.high : TIERS.standard;
+  if (!m) return false;
+  if (m[1] === 'fable' || m[1] === 'mythos') return true;
+  return Number(m[2]) + Number(m[3] ?? 0) / 10 >= 4.7;
 }
+
+export const imageTier = (model) => (isClaude47Plus(model) ? TIERS.high : TIERS.standard);
 
 const patches = (w, h) => Math.ceil(w / PATCH) * Math.ceil(h / PATCH);
 

@@ -104,7 +104,7 @@ test('projet : chemins Windows ; racine, nom trop long ou caractère de contrôl
 test('sorties : chacune à son outil, rattachée au tour suivant même dans la même seconde (sinon payée un tour trop tôt)', () => {
   const s = read([
     assistantTool({ t: T0, id: 'm1', req: 'r1', input: 10, cw: 5_000, uses: [['u1', 'Bash'], ['u2', 'mcp__playwright__browser_click']] }),
-    toolResults({ t: T0, results: [['u1', 'x'.repeat(4_000)], ['u2', 'ok']] }),
+    toolResults({ t: T0, results: [['u1', 'x'.repeat(2_800)], ['u2', 'ok']] }),
     assistant({ t: T0, id: 'm2', req: 'r2', input: 10, cr: 5_000, cw: 1_000 }),
     toolResults({ t: T0 + 1, results: [['inconnu', 'abc']] }),
     assistant({ t: T0 + 2, id: 'm3', req: 'r3', input: 10, cr: 6_000 }),
@@ -112,7 +112,7 @@ test('sorties : chacune à son outil, rattachée au tour suivant même dans la m
   assert.deepEqual(s.tools, ['Bash', 'mcp__playwright', '?']);
   assert.deepEqual(s.tr.at, [1, 1, 2]);
   assert.deepEqual(s.tr.tool, [0, 1, 2]);
-  assert.deepEqual(s.tr.tok, [1_000, 1, 1]);
+  assert.deepEqual(s.tr.tok, [1_000, 1, 2]);   // claude-opus-4-6 : 2,8 caractères par token
   assert.deepEqual(s.tr.img, [0, 0, 0]);
 });
 
@@ -136,7 +136,7 @@ test('images : tokens d’après les dimensions et le modèle du tour suivant ; 
     assistant({ t: T0 + 2, id: 'm2', model: 'claude-opus-4-6', input: 10, cr: 5_000 }),
   ]);
   assert.deepEqual(s.tr.img, [1, 1, 0]);
-  assert.deepEqual(s.tr.tok, [1_560, 1_568, 1]);   // palier standard ; l'illisible compte au plafond
+  assert.deepEqual(s.tr.tok, [1_560, 1_568, 2]);   // palier standard ; l'illisible compte au plafond
   assert.deepEqual(s.tr.file, [0, 0, 0]);
   assert.equal(s.tr.unsized, 1);
 });
@@ -172,4 +172,25 @@ test('sortie suivie d’un compactage avant le tour suivant : écartée (le rés
   ]);
   assert.deepEqual(s.tr.tok, [2]);
   assert.deepEqual(s.tr.at, [1]);
+});
+
+test('tokens d’un texte selon le modèle du tour suivant : 2,2 caractères par token dès Claude 4.7 (nouveau tokenizer), 2,8 avant', () => {
+  const run = (model) => read([
+    assistantTool({ t: T0, id: 'm1', model, input: 10, cw: 5_000, uses: [['u1', 'Bash']] }),
+    toolResults({ t: T0 + 1, results: [['u1', 'x'.repeat(2_200)]] }),
+    assistant({ t: T0 + 2, id: 'm2', model, input: 10, cr: 5_000 }),
+  ]).tr.tok[0];
+  assert.equal(run('claude-opus-5-5'), 1_000);
+  assert.equal(run('claude-opus-4-6'), 786);
+});
+
+test('relectures : une autre plage du même fichier est une lecture neuve (pagination), la même plage relue ne l’est pas', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['r1', 'Read', { file_path: '/p/a.js' }], ['r2', 'Read', { file_path: '/p/a.js', offset: 200, limit: 100 }]] }),
+    toolResults({ t: T0 + 1, results: [['r1', 'aaaa'], ['r2', 'bbbb']] }),
+    assistantTool({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, uses: [['r3', 'Read', { file_path: '/p/a.js', offset: 200, limit: 100 }], ['r4', 'Read', { file_path: '/p/a.js', limit: 100, offset: 200 }]] }),
+    toolResults({ t: T0 + 3, results: [['r3', 'bbbb'], ['r4', 'bbbb']] }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.tr.file, [0, 1, 1, 1]);
 });

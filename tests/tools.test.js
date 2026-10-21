@@ -32,8 +32,8 @@ test('« dont images » et « dont relectures » : sous-ensembles ; une relectur
   assert.ok(near(r.rereads.cost.wtok, (1_000 / 80_010) * 19_510));
 });
 
-test('grosses sorties : texte de plus de 5 000 tokens (≈ 20 000 caractères) ; une image n’en est jamais une', () => {
-  const s = withOutputs(session(BASE), ['Bash'], [[1, 0, 5_001], [1, 0, 5_000], [1, 0, 9_000, 1]]);
+test('grosses sorties : texte de plus de 9 000 tokens (≈ 20 000 caractères, seuil du brief) ; une image n’en est jamais une', () => {
+  const s = withOutputs(session(BASE), ['Bash'], [[1, 0, 9_001], [1, 0, 9_000], [1, 0, 12_000, 1]]);
   assert.equal(toolCosts([s]).tools[0].big, 1);
 });
 
@@ -46,4 +46,9 @@ test('fenêtre : sorties comptées au tour qui les fait entrer, coût au tour qu
 test('session sans sorties (lue avant cette version) : rien', () => {
   const r = toolCosts([session(BASE)]);
   assert.deepEqual([r.tools.length, r.images.n, r.rereads.n], [0, 0, 0]);
+});
+
+test('un seul Read qui rend une image et du texte n’est pas une relecture de lui-même', () => {
+  const s = withOutputs(session(BASE), ['Read'], [[1, 0, 1_560, 1, 0], [1, 0, 1_000, 0, 0]]);
+  assert.equal(toolCosts([s]).rereads.n, 0);
 });
