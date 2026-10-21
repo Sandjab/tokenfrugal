@@ -57,9 +57,11 @@ y lire son historique, son what-if et ses recommandations.
 
 ## 4. Modèle (`src/model`)
 
-- `byProject(sessions, range)` → une ligne par projet, `{ id, name, cost, share, sessions, turns,
-  socleMedian, over150kShare, rebuildExcess, subShare }`, triée par coût décroissant. Les sessions
-  sans `project` forment une ligne d'`id` `null` (« Projet inconnu »).
+- `byProject(sessions, range)` → une ligne par projet, `{ id, name, cost, costOver150k,
+  rebuildExcess, subCost, sessions, turns, socleMedian }`, triée par coût en $ décroissant. Les coûts
+  sont des paires `{ usd, wtok }` : les parts (du total, au-delà de 150 k, des sous-agents) dépendent
+  de l'unité affichée, la page les calcule. Les sessions sans `project` forment une ligne d'`id`
+  `null` (« Projet inconnu »).
 - Les chiffres viennent de `weekly` + `mergeWeeks` appliqués aux sessions du projet, filtrées sur la
   même fenêtre `range` que le reste de la page : aucune règle de calcul nouvelle.
 - `sessions` compte les sessions qui ont au moins un tour dans la fenêtre.
