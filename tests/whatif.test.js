@@ -304,3 +304,10 @@ test('plafond et bascule au seuil sur le même tour : la bascule repart de R + P
   assert.equal(r.switches, 1);
   assert.ok(near(r.sim.wtok, 50_010 + 9_001 + 53_747.5 + 16_809));
 });
+
+test('plafond sur une sortie dont le tour suivant n’a pas de prix : la réduction vaut pour les tours tarifés après lui', () => {
+  const s = withOutputs({ ...A, models: ['claude-opus-4-6', 'modele-sans-prix'], m: [0, 1, 0] }, ['Bash'], [[1, 0, 20_000]]);
+  const r = whatIf([s], { textCap: 5_000 });
+  // t2 : 15 000 retirés du cache lu → 10 + 5 500 + 12 500 = 18 010 au lieu de 19 510
+  assert.ok(near(r.real.wtok - r.sim.wtok, 1_500));
+});

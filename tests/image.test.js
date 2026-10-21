@@ -30,3 +30,12 @@ test('tokens : les six exemples du tableau de la doc Vision d’Anthropic, sur l
     assert.equal(imageTokens(w, h, 'claude-opus-5-5'), high, `${w}x${h} haute résolution`);
   }
 });
+
+test('en-tête PNG tronqué : null (compté au plafond), pas une hauteur de 4 milliards de pixels', () => {
+  const cut = Buffer.from(png(100, 200), 'base64').subarray(0, 20).toString('base64');
+  assert.equal(imageSize(cut), null);
+});
+
+test('image très allongée : au moins une rangée de carrés, jamais 0 token', () => {
+  assert.ok(imageTokens(10_000, 1, 'claude-opus-4-6') >= 1);
+});

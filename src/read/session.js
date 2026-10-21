@@ -124,6 +124,8 @@ export class SessionReader {
   #compact(o, ts) {
     if (this.kind !== 'main') return;
     if (Number.isNaN(ts)) { this.#ignore('no-timestamp'); return; }
+    // Sorties pas encore suivies d'un tour : le résumé les remplace, aucun tour ne les repaie.
+    this.outputs = this.outputs.filter((x) => x.next < this.turns.length);
     const m = o.compactMetadata && typeof o.compactMetadata === 'object' ? o.compactMetadata : {};
     const trigger = m.trigger === 'auto' || m.trigger === 'manual' ? m.trigger : 'other';
     this.events.push({ t: Math.floor(ts / 1000), kind: 'compact', trigger, pre: num(m.preTokens), post: num(m.postTokens) });

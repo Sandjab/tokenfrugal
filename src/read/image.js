@@ -13,7 +13,7 @@ export function imageSize(b64) {
   try { s = atob(b64.slice(0, HEAD_CHARS)); } catch { return null; }
   const b = (i) => (i < s.length ? s.charCodeAt(i) : -1);
   const ok = (w, h) => (w > 0 && h > 0 ? { w, h } : null);
-  if (s.startsWith('\x89PNG\r\n\x1a\n') && s.slice(12, 16) === 'IHDR') {
+  if (s.startsWith('\x89PNG\r\n\x1a\n') && s.slice(12, 16) === 'IHDR' && s.length >= 24) {
     return ok(((b(16) << 24) | (b(17) << 16) | (b(18) << 8) | b(19)) >>> 0, ((b(20) << 24) | (b(21) << 16) | (b(22) << 8) | b(23)) >>> 0);
   }
   if (s.startsWith('GIF8') && s.length >= 10) return ok(b(6) | (b(7) << 8), b(8) | (b(9) << 8));
@@ -58,7 +58,8 @@ const patches = (w, h) => Math.ceil(w / PATCH) * Math.ceil(h / PATCH);
 export function imageTokens(w, h, model) {
   const { edge, cap } = imageTier(model);
   let k = Math.min(1, edge / Math.max(w, h));
-  let W = Math.round(w * k), H = Math.round(h * k);
-  while (patches(W, H) > cap) { k *= 0.999; W = Math.round(w * k); H = Math.round(h * k); }
+  const px = (x) => Math.max(1, Math.round(x * k));   // une image très allongée garde au moins 1 px
+  let W = px(w), H = px(h);
+  while (patches(W, H) > cap) { k *= 0.999; W = px(w); H = px(h); }
   return patches(W, H);
 }

@@ -99,25 +99,32 @@ export function whatIf(sessions, params = {}, range = {}) {
       if (m) book(e.t, summaryCost(e.pre, e.post, m), summaryCost(Math.max(0, e.pre - delta - p.socleCut), e.post, m), false);
       delta = 0;
     };
+    // Compactages réels avant l'heure t : résumé estimé des deux côtés, puis la simulation repart
+    // du contexte réel.
+    const compactBefore = (t) => {
+      let compacted = false;
+      while (ev < s.events.length && s.events[ev].t <= t) {
+        bookCompaction(s.events[ev++]);
+        compacted = true;
+      }
+      if (compacted) { prev = null; armed = true; }
+    };
     for (let i = 0; i < s.t.length; i++) {
       const t = s.t[i], model = s.models[s.m[i]];
       const real = costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), model);
       if (!real) {
         if (inRange(t)) res.unpriced++;
-        if (!s.sub[i] && prev) prev.t = t;   // un tour inconnu n'est pas une pause
+        if (!s.sub[i]) {
+          // les plafonds des sorties arrivées avant ce tour valent pour les tours tarifés suivants
+          compactBefore(t);
+          delta += cutAt.get(i) || 0;
+          if (prev) prev.t = t;   // un tour inconnu n'est pas une pause
+        }
         continue;
       }
       if (s.sub[i]) { book(t, real, real, true); continue; }
 
-      // Compactages réels avant ce tour : résumé estimé des deux côtés, puis la simulation repart
-      // du contexte réel.
-      let compacted = false;
-      while (ev < s.events.length && s.events[ev].t <= t) {
-        const e = s.events[ev++];
-        bookCompaction(e);
-        compacted = true;
-      }
-      if (compacted) { prev = null; armed = true; }
+      compactBefore(t);
 
       const ctx = ctxOf(s, i), gap = prev ? t - prev.t : 0;
       let switched = false;

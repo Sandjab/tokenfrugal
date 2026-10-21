@@ -160,3 +160,16 @@ test('noms d’outil : MCP regroupé par serveur ; hors format → other (aucun 
   assert.equal(toolNameOf('nom avec espaces'), 'other');
   assert.equal(toolNameOf(undefined), '?');
 });
+
+test('sortie suivie d’un compactage avant le tour suivant : écartée (le résumé l’a remplacée, aucun tour ne la repaie)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['u1', 'Bash'], ['u2', 'Bash']] }),
+    toolResults({ t: T0 + 1, results: [['u1', 'avant']] }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+    toolResults({ t: T0 + 3, results: [['u2', 'x'.repeat(40_000)]] }),
+    compact({ t: T0 + 4, pre: 15_010, post: 2_000 }),
+    assistant({ t: T0 + 5, id: 'm3', input: 10, cw: 2_000 }),
+  ]);
+  assert.deepEqual(s.tr.tok, [2]);
+  assert.deepEqual(s.tr.at, [1]);
+});
