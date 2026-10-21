@@ -15,7 +15,7 @@ export const PAGE_FILES = [
   '../model/whatif.js', '../model/recommend.js', '../model/projects.js', './strings.js', './page.js', '../web/app.js',
 ];
 export const WORKER_FILES = [
-  '../store/sha256.js', '../read/session.js', '../read/group.js', '../store/merge.js',
+  '../store/sha256.js', '../read/image.js', '../read/session.js', '../read/group.js', '../store/merge.js',
   '../store/history.js', '../web/read-web.js', '../web/worker.js',
 ];
 
