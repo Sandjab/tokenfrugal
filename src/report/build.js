@@ -50,6 +50,7 @@ const SECTIONS = `<main>
 <section id="history"></section>
 <section id="projects"></section>
 <section id="indicators"></section>
+<section id="tools"></section>
 <section id="whatif"></section>
 <section id="quality"></section>
 </main>

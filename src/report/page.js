@@ -6,6 +6,7 @@ import { weekly, mergeWeeks, trendWeeks, weeksIn } from '../model/metrics.js';
 import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../model/whatif.js';
 import { recommend } from '../model/recommend.js';
 import { byProject, projectLabels } from '../model/projects.js';
+import { toolCosts } from '../model/tools.js';
 import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, setLang, getLang, pickLang } from './strings.js';
 
 const LANG_KEY = 'tokenfrugal-lang';
@@ -13,6 +14,8 @@ const SLIDERS = [
   { key: 'socleCut', min: 0, max: 60_000, step: 1_000 },
   { key: 'threshold', min: 50_000, max: 500_000, step: 10_000, toggle: true },
   { key: 'pauseSwitchMin', min: 5, max: 180, step: 5, toggle: true },
+  { key: 'textCap', min: 1_000, max: 50_000, step: 1_000, toggle: true },
+  { key: 'imageCap', min: 500, max: 4_784, step: 100, toggle: true },
   { key: 'R', min: 5_000, max: 150_000, step: 1_000, hyp: true },
   { key: 'S', min: 1_000, max: 60_000, step: 1_000, hyp: true },
   { key: 'P', min: 0, max: 100_000, step: 1_000, hyp: true },
@@ -21,6 +24,8 @@ const SLIDERS = [
 // ALL : toutes les sessions ; SESSIONS : celles du projet choisi, dont partent les calculs (spec projets § 5.1).
 let DATA, ALL, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, PROJECTS, LABELS, state, afterRender = null;
 let projectRows = null;   // { period, rows } : le tableau « Par projet » ne dépend que de la période
+let toolRows = null;      // { key, r } : le bloc « Sorties d'outils » dépend de la période et du projet
+const ALL_ON = () => ({ threshold: true, pauseSwitchMin: true, textCap: true, imageCap: true });
 const charts = new Map();
 let pending = false;
 // Derniers résultats gardés : ils portent les deux unités, et ni la bascule d'unité ni le changement
@@ -33,7 +38,7 @@ const val = (c) => c[state.unit];
 const money = (c) => fmtCost(c, state.unit);
 const med = (a) => (a.length ? fmtTok(median(a)) : '—');
 const ratio = (a, b) => (val(b) ? val(a) / val(b) : 0);
-const fmtSlider = (key, v) => (key === 'pauseSwitchMin' ? `${v} min` : fmtTok(v));
+const fmtSlider = (key, v) => (key === 'pauseSwitchMin' ? `${v} min` : key === 'imageCap' ? String(v) : fmtTok(v));
 const rows = (pairs) => pairs.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join('');
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 // Valeur d'option d'un projet : son id, « none » pour les sessions sans projet.
@@ -68,8 +73,9 @@ export function renderReport(data, onRender = null) {
   PROJECTS = byProject(ALL);
   LABELS = projectLabels(PROJECTS);
   projectRows = null;
+  toolRows = null;
   OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
-  state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: { threshold: true, pauseSwitchMin: true }, cache1h: false };
+  state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: ALL_ON(), cache1h: false };
   afterRender = onRender;
   selectSessions();
   resetResults();
@@ -105,6 +111,7 @@ function renderAll() {
   renderHistory();
   renderProjects();
   renderIndicators();
+  renderTools();
   buildWhatIf();
   if (lastWhatIf) showWhatIf(); else updateWhatIf();
   if (lastSweep) showSweep();
@@ -250,6 +257,26 @@ function renderIndicators() {
   </div>`;
 }
 
+// Sorties d'outils sur la période et le projet choisis (spec sorties d'outils § 5.1). Recalculé seulement
+// quand l'un des deux change : ni l'unité ni la langue ne le refont.
+function renderTools() {
+  const key = `${state.period}|${state.project}`;
+  if (toolRows?.key !== key) toolRows = { key, r: toolCosts(SESSIONS, range()) };
+  const { tools, images, rereads } = toolRows.r, total = mergeWeeks(periodWeeks()).cost;
+  const top = tools.slice(0, 12), rest = tools.slice(12);
+  const other = { n: 0, tok: 0, big: 0, cost: { usd: 0, wtok: 0 } };
+  for (const x of rest) { other.n += x.n; other.tok += x.tok; other.big += x.big; other.cost.usd += x.cost.usd; other.cost.wtok += x.cost.wtok; }
+  const line = (label, x, big = true) => `<tr><th scope="row">${label}</th><td>${x.n}</td><td>${fmtTok(x.tok)}</td>
+    <td>${money(x.cost)}</td><td>${fmtShare(ratio(x.cost, total))}</td><td>${big ? x.big : '—'}</td></tr>`;
+  $('tools').innerHTML = `<h2>${T.tools}</h2>
+    <div class="scroll"><table><thead><tr>${T.toolCols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${top.map((x) => line(esc(x.tool), x)).join('')}
+    ${rest.length ? line(T.otherTools, other) : ''}
+    ${line(T.ofImages, images, false)}${line(T.ofRereads, rereads)}
+    </tbody></table></div>
+    <p class="note">${T.toolsNote}</p>`;
+}
+
 function hypNote(key) {
   if (key === 'P') return T.hyp.guess;
   return HYP.measured[key] ? T.hyp.measured(HYP.measured[key]) : T.hyp.fallback;
@@ -268,6 +295,7 @@ function sliderHtml(s) {
     ${s.hyp ? `<small>${hypNote(s.key)}</small>` : ''}
     ${s.key === 'threshold' ? '<small id="note-threshold"></small>' : ''}
     ${s.key === 'pauseSwitchMin' ? `<small id="note-pauseSwitchMin">${pauseNote()}</small>` : ''}
+    ${s.key === 'textCap' || s.key === 'imageCap' ? `<small>${T.capOptimistic}</small>` : ''}
   </div>`;
 }
 
@@ -304,8 +332,8 @@ function buildWhatIf() {
     updateWhatIf();
     updateSweep();
   };
-  $('wi-optimum').onclick = () => preset({ ...OPTIMUM }, { threshold: true, pauseSwitchMin: true });
-  $('wi-neutral').onclick = () => preset({ ...state.values, socleCut: 0 }, { threshold: false, pauseSwitchMin: false });
+  $('wi-optimum').onclick = () => preset({ ...OPTIMUM }, ALL_ON());
+  $('wi-neutral').onclick = () => preset({ ...state.values, socleCut: 0 }, { threshold: false, pauseSwitchMin: false, textCap: false, imageCap: false });
 }
 
 function scheduleWhatIf() {
@@ -365,6 +393,7 @@ function renderQuality() {
     [T.q.sessions, ALL.length],
     [T.q.stale, stale],
     [T.q.unpriced, unpriced.length ? unpriced.map(esc).join(', ') : '—'],
+    [T.q.unsized, ALL.reduce((a, s) => a + (s.tr ? s.tr.unsized : 0), 0)],
     ...Object.entries(ignored).sort((a, b) => b[1] - a[1]).map(([k, n]) => [T.q.ignored(esc(k)), n]),
   ])}</table>`;
 }
@@ -375,6 +404,7 @@ function renderUnit() {
   renderHistory();
   renderProjects();
   renderIndicators();
+  renderTools();
   showWhatIf();
   showSweep();
 }

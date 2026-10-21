@@ -59,6 +59,12 @@ export const STRINGS = {
     projects: 'Par projet',
     projectCols: ['Projet', 'Coût', 'Part', 'Sessions', 'Tours', 'Socle médian', 'Coût au-delà de 150 k', 'Surcoût des reconstructions', 'Part des sous-agents'],
     projectsNote: 'Les sessions lues par une version antérieure, dont Claude Code a depuis purgé les journaux, n’ont pas de projet : elles sont dans « Projet inconnu ».',
+    tools: 'Sorties d’outils',
+    toolCols: ['Outil', 'Sorties', 'Tokens estimés', 'Coût reporté', 'Part du coût', 'Sorties > 5 k tokens'],
+    otherTools: 'Autres outils',
+    ofImages: 'dont images',
+    ofRereads: 'dont relectures de fichiers',
+    toolsNote: 'Coût reporté : part du coût du contexte de chaque tour où la sortie est encore présente, jusqu’au compactage ou à la fin de la session. Tokens estimés : texte ÷ 4, images d’après leurs dimensions. Les sessions lues avant cette version n’ont pas le détail des sorties.',
     indicators: 'Indicateurs',
     ctxBucketLabels: ['Tours < 50 k', 'Tours 50–100 k', 'Tours 100–150 k', 'Tours 150–200 k', 'Tours > 200 k'],
     ind: {
@@ -79,8 +85,10 @@ export const STRINGS = {
     lever: {
       socleCut: 'Socle fixe allégé de', threshold: 'Basculer dès un contexte de', pauseSwitchMin: 'Basculer avant une pause de plus de',
       cache1h: 'Cache 1 h au lieu de 5 min', R: 'Hypothèse R : taille de reprise', S: 'Hypothèse S : taille du résumé', P: 'Hypothèse P : pénalité de reprise',
+      textCap: 'Plafond des sorties texte d’outils', imageCap: 'Plafond des images',
     },
     thresholdInactive: 'Sans effet : après une bascule, le contexte repartirait de R + P, qui n’est pas sous ce seuil.',
+    capOptimistic: 'Gain optimiste : une sortie tronquée ou une image réduite peut demander un appel de plus, non compté.',
     hyp: {
       measured: (n) => `mesuré sur ${n} cas`, fallback: 'valeur par défaut faute de mesure', guess: 'supposition, à ajuster',
       pause1h: (share) => `60 min : vos écritures en cache sont en TTL 1 h (${share})`, pause5m: '15 min : cache de 5 min',
@@ -98,6 +106,7 @@ export const STRINGS = {
     q: {
       sessions: 'Sessions relevées', stale: 'Sessions lues par une ancienne version (journaux purgés)',
       unpriced: 'Modèles sans prix', ignored: (k) => `Lignes ignorées : ${k}`,
+      unsized: 'Images de taille illisible (comptées au plafond)',
     },
     privacy: 'Ce fichier contient le détail de vos tours (nombres et heures) et le nom de vos projets, sans texte ni chemin. Il reste sur votre machine.',
     historyErrors: {
@@ -181,6 +190,12 @@ export const STRINGS = {
     projects: 'By project',
     projectCols: ['Project', 'Cost', 'Share', 'Sessions', 'Turns', 'Median base', 'Cost above 150k', 'Rebuild extra cost', 'Subagents’ share'],
     projectsNote: 'Sessions read by an earlier version, whose logs Claude Code has since purged, have no project: they are under “Unknown project”.',
+    tools: 'Tool outputs',
+    toolCols: ['Tool', 'Outputs', 'Estimated tokens', 'Carried cost', 'Share of cost', 'Outputs > 5k tokens'],
+    otherTools: 'Other tools',
+    ofImages: 'of which images',
+    ofRereads: 'of which file rereads',
+    toolsNote: 'Carried cost: the share of each turn’s context cost taken by the outputs still in it, until compaction or the end of the session. Estimated tokens: text ÷ 4, images from their dimensions. Sessions read before this version have no output detail.',
     indicators: 'Indicators',
     ctxBucketLabels: ['Turns < 50k', 'Turns 50–100k', 'Turns 100–150k', 'Turns 150–200k', 'Turns > 200k'],
     ind: {
@@ -201,8 +216,10 @@ export const STRINGS = {
     lever: {
       socleCut: 'Fixed base trimmed by', threshold: 'Switch from a context of', pauseSwitchMin: 'Switch before a break longer than',
       cache1h: '1-hour cache instead of 5 min', R: 'Assumption R: resume size', S: 'Assumption S: summary size', P: 'Assumption P: resume penalty',
+      textCap: 'Tool text output cap', imageCap: 'Image cap',
     },
     thresholdInactive: 'No effect: after a switch the context would restart from R + P, which is not below this threshold.',
+    capOptimistic: 'Optimistic gain: a truncated output or a smaller image may take one more call, not counted.',
     hyp: {
       measured: (n) => `measured on ${n} cases`, fallback: 'default value, nothing to measure', guess: 'assumption, adjust it',
       pause1h: (share) => `60 min: your cache writes use a 1-hour TTL (${share})`, pause5m: '15 min: 5-minute cache',
@@ -220,6 +237,7 @@ export const STRINGS = {
     q: {
       sessions: 'Sessions recorded', stale: 'Sessions read by an older version (logs purged)',
       unpriced: 'Models without a price', ignored: (k) => `Ignored lines: ${k}`,
+      unsized: 'Images of unreadable size (counted at the cap)',
     },
     privacy: 'This file holds the detail of your turns (numbers and times) and your project names, with no text or path. It stays on your machine.',
     historyErrors: {

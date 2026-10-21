@@ -5,10 +5,10 @@ import { pathToFileURL } from 'node:url';
 import { collect, loadSessions } from '../../src/store/store.js';
 import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
-import { T0, writeProjects, tmpStore, assistant, user } from '../helpers/logs.js';
+import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults } from '../helpers/logs.js';
 import { session } from '../helpers/model.js';
 
-let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl;
+let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -68,6 +68,16 @@ test.beforeAll(async () => {
   const legacyFile = path.join(tmpStore(), 'report.html');
   writeFileSync(legacyFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: [session([{ t: T0, in: 10, cw: 30_000 }])] }));
   legacyUrl = pathToFileURL(legacyFile).href;
+  // Une session dont une sortie Bash de 20 000 tokens reste dans un contexte qui grossit ; un projet sans outils.
+  const outils = [user({ t: T0, cwd: '/home/u/outils' }),
+    assistantTool({ t: T0 + 5, id: 'k0', input: 10, cw: 30_000, output: 100, uses: [['b1', 'Bash']] }),
+    toolResults({ t: T0 + 6, results: [['b1', 'x'.repeat(80_000)]] })];
+  for (let i = 1; i <= 10; i++) outils.push(assistant({ t: T0 + 5 + 60 * i, id: `k${i}`, input: 10, cr: 30_000 + 20_000 * i, cw: 20_000, output: 100 }));
+  const storeT = tmpStore();
+  await collect({ projectsDir: writeProjects({ 'p-outils': { o1: { main: outils } }, 'p-plain': { q1: proj('/home/u/plain', T0 + 7200, 30_000) } }), storeDir: storeT });
+  const toolsFile = path.join(storeT, 'report.html');
+  writeFileSync(toolsFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeT) }));
+  toolsUrl = pathToFileURL(toolsFile).href;
 });
 
 test('aucune requête réseau, aucune erreur JavaScript', async ({ page }) => {
@@ -304,4 +314,22 @@ test('historique antérieur sans projet : ligne « Projet inconnu », sélection
   await page.selectOption('#project', { label: 'Projet inconnu' });
   await expect(page.locator('#summary .big')).not.toHaveText(/^0,00/);
   expect(errors).toEqual([]);
+});
+
+test('sorties d’outils : Bash en tête, lignes « dont images » et « dont relectures » ; filtre par projet appliqué', async ({ page }) => {
+  await page.goto(toolsUrl);
+  await expect(page.locator('#tools tbody th').first()).toHaveText('Bash');
+  await expect(page.locator('#tools')).toContainText('dont images');
+  await expect(page.locator('#tools')).toContainText('dont relectures de fichiers');
+  await page.selectOption('#project', { label: 'plain' });
+  await expect(page.locator('#tools tbody th', { hasText: 'Bash' })).toHaveCount(0);
+});
+
+test('curseur du plafond texte : couper le levier change le coût simulé ; note « gain optimiste »', async ({ page }) => {
+  await page.goto(toolsUrl);
+  const before = await page.locator('#wi-sim').textContent();
+  await page.uncheck('#on-textCap');
+  await expect(page.locator('#wi-sim')).not.toHaveText(before);
+  await expect(page.locator('#whatif')).toContainText('Gain optimiste');
+  await expect(page.locator('#sl-imageCap')).toHaveAttribute('max', '4784');
 });
