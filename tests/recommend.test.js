@@ -92,3 +92,17 @@ test('phrases des plafonds : chiffres calculés, gain dit optimiste', () => {
     `Plafonner les sorties d’outils à ${fmtTok(5_000)} tokens (head, plages de lignes, filtres), gain optimiste : −${fmtCost(pw, 'usd')} par semaine`);
   assert.match(recommendationText({ lever: 'imageCap', params: { imageCap: 1_568 }, perWeek: pw }, 'usd'), /^Réduire ou recadrer les captures d’écran \(≤ 1\s568 tokens/);
 });
+
+test('sous-agents sur Sonnet 5.5 : recommandé quand des sous-agents tournent sur Opus, pas quand ils sont sur Haiku', () => {
+  const turns = [{ t: T, in: 10, cw: 10_000 }, { t: T + 60, in: 10, cr: 100_000, cw: 5_000, out: 1_000, sub: 1 }];
+  const sub = recommend([session(turns)]).find((x) => x.lever === 'subModel');
+  assert.deepEqual(sub.params, { subModel: 'claude-sonnet-5-5' });
+  assert.ok(near(sub.perWeek.wtok, (21_260 * 0.6) / 4));
+  assert.ok(!recommend([session(turns, { model: 'claude-haiku-4-5' })]).some((x) => x.lever === 'subModel'));
+});
+
+test('phrase du levier sous-agents : modèle cible et gain hors qualité', () => {
+  const pw = { usd: 3, wtok: 1 };
+  assert.equal(recommendationText({ lever: 'subModel', params: { subModel: 'claude-sonnet-5-5' }, perWeek: pw }, 'usd'),
+    `Passer les sous-agents sur Sonnet 5.5 (champ model des agents), gain hors qualité : −${fmtCost(pw, 'usd')} par semaine`);
+});

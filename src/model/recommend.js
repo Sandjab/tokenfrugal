@@ -12,6 +12,7 @@ export const LEVERS = {
   threshold: { threshold: DEFAULTS.threshold },
   textCap: { textCap: DEFAULTS.textCap },
   imageCap: { imageCap: DEFAULTS.imageCap },
+  subModel: { subModel: DEFAULTS.subModel },
 };   // + pause, à T mesuré (measuredDefaults)
 
 function lastTurnOf(sessions) {

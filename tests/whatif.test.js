@@ -311,3 +311,32 @@ test('plafond sur une sortie dont le tour suivant n’a pas de prix : la réduct
   // t2 : 15 000 retirés du cache lu → 10 + 5 500 + 12 500 = 18 010 au lieu de 19 510
   assert.ok(near(r.real.wtok - r.sim.wtok, 1_500));
 });
+
+// Un tour principal sur Opus 4.6, puis trois tours de sous-agents aux mêmes parts (entrée 10, cache lu 100 000,
+// cache écrit 5 000, sortie 1 000) sur Opus 4.6, Sonnet 4.6 et Haiku 4.5. Aux prix de Sonnet 5.5, ces parts
+// coûtent 0,04252 $ : 0,4 × Opus 4.6 (0,1063 $, 21 260 tokens pondérés), 2/3 × Sonnet 4.6 (0,06378 $,
+// 21 260), plus que Haiku 4.5 (0,02126 $).
+const SUBS = {
+  ...session([{ t: T, in: 10, cw: 40_000 },
+    ...[1, 2, 3].map((k) => ({ t: T + 60 * k, in: 10, cr: 100_000, cw: 5_000, out: 1_000, sub: 1 }))]),
+  models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'], m: [0, 0, 1, 2],
+};
+
+test('sous-agents sur Sonnet 5.5 : Opus et Sonnet 4.6 baissent, Haiku 4.5 (moins cher) ne change pas, le tour principal non plus', () => {
+  const r = whatIf([SUBS], { subModel: 'claude-sonnet-5-5' });
+  assert.ok(near(r.real.usd - r.sim.usd, (0.1063 - 0.04252) + (0.06378 - 0.04252)));
+  // tokens pondérés exprimés dans l'unité du modèle réel : 21 260 × (1 − 0,4) + 21 260 × (1 − 2/3)
+  assert.ok(near(r.real.wtok - r.sim.wtok, 21_260 * 0.6 + 21_260 / 3));
+});
+
+test('sous-agents : levier neutre ou session sans sous-agent → simulé = réel (sinon le what-if ment)', () => {
+  const r = whatIf([SUBS], NEUTRAL);
+  assert.deepEqual([r.sim.usd, r.sim.wtok], [r.real.usd, r.real.wtok]);
+  const a = whatIf([A], { subModel: 'claude-sonnet-5-5' });
+  assert.deepEqual([a.sim.usd, a.sim.wtok], [a.real.usd, a.real.wtok]);
+});
+
+test('sous-agent sur un modèle sans prix : inchangé et compté comme sans prix', () => {
+  const r = whatIf([{ ...SUBS, models: ['claude-opus-4-6', 'modele-inconnu', 'claude-haiku-4-5'] }], { subModel: 'claude-sonnet-5-5' });
+  assert.equal(r.unpriced, 1);   // le seul tour sur le modèle inconnu
+});

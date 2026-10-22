@@ -3,11 +3,12 @@ import { partsOf, costOf } from './cost.js';
 import { ctxOf, median, isoWeek, zero, add, isRebuild, mainIndexes } from './util.js';
 
 // Leviers coupés : la simulation reproduit le réel corrigé.
-export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false, textCap: Infinity, imageCap: Infinity };
+export const NEUTRAL = { socleCut: 0, threshold: Infinity, pauseSwitchMin: Infinity, cache1h: false, textCap: Infinity, imageCap: Infinity, subModel: null };
 // Valeurs par défaut des leviers, préréglage « tous les leviers » (spec § 7.5) ; P est une supposition.
 // pauseSwitchMin : valeur pour un cache de 5 min, et repli ; measuredDefaults la remplace selon le TTL mesuré.
 // textCap, imageCap : plafonds des sorties d'outils (spec sorties d'outils § 4.2) ; textCap ≈ 20 000 caractères.
-export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000, textCap: 9_000, imageCap: 1_568 };
+// subModel : modèle des sous-agents (spec levier modèle § 3) ; jamais plus cher que le réel.
+export const DEFAULTS = { socleCut: 10_000, threshold: 150_000, pauseSwitchMin: 15, cache1h: false, P: 20_000, textCap: 9_000, imageCap: 1_568, subModel: 'claude-sonnet-5-5' };
 // T quand les écritures en cache sont surtout en TTL 1 h : une pause de moins d'1 h ne casse pas le cache.
 export const PAUSE_SWITCH_MIN_1H = 60;
 // R et S quand rien ne permet de les mesurer.
@@ -122,7 +123,13 @@ export function whatIf(sessions, params = {}, range = {}) {
         }
         continue;
       }
-      if (s.sub[i]) { book(t, real, real, true); continue; }
+      if (s.sub[i]) {
+        // levier modèle des sous-agents : le moins cher en $ du réel et de la cible ; tokens pondérés dans l'unité
+        // du modèle réel (un token pondéré se rapporte au prix d'entrée de son modèle, spec levier modèle § 3)
+        const alt = p.subModel ? costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), p.subModel) : null;
+        book(t, real, alt && alt.usd < real.usd ? { usd: alt.usd, wtok: (real.wtok * alt.usd) / real.usd } : real, true);
+        continue;
+      }
 
       compactBefore(t);
 
