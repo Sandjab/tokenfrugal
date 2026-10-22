@@ -4,7 +4,8 @@
 // les lignes Fable/Mythos/Opus 4.6+/Sonnet 4.6+/Haiku identiques, cache lu confirmé pour Fable 5.1,
 // Opus 5.5 et Sonnet 5.5.
 // Opus 4 / 4.1, Sonnet 4 / 4.5 et Haiku 3.5 absents du skill : grille publique, non revérifiée.
-// Haiku 5.5 : prix valable jusqu'à 100 k tokens de prompt.
+// Haiku 5.5 : prix plus hauts quand le prompt (entrée + cache lu + cache écrit) dépasse 100 000 tokens,
+// sur toutes les parts du tour (table LONG_PROMPT, relevée le 2026-10-22 sur la page des prix d'Anthropic).
 export const PRICES = [
   // [préfixe, entrée, sortie, cache lu, cache écrit] — le préfixe le plus long gagne
   ['claude-fable-5-1', 10, 50, 0.25, 12.5],
@@ -33,18 +34,25 @@ export const PRICES = [
   ['claude-haiku', 1, 5, 0.1, 1.25],
 ];
 const FAMILY = [['opus', 'claude-opus'], ['sonnet', 'claude-sonnet'], ['haiku', 'claude-haiku']];
+// [préfixe, seuil, entrée, sortie, cache lu, cache écrit] : prix d'un tour dont le prompt dépasse le seuil
+export const LONG_PROMPT = [
+  ['claude-haiku-5-5', 100000, 0.5, 2.5, 0.05, 0.625],
+];
 
-function row(prefix) {
+function row(prefix, promptTokens) {
+  const l = LONG_PROMPT.find((p) => p[0] === prefix && promptTokens > p[1]);
+  if (l) return { input: l[2], output: l[3], cacheRead: l[4], cacheWrite: l[5] };
   const r = PRICES.find((p) => p[0] === prefix);
   return { input: r[1], output: r[2], cacheRead: r[3], cacheWrite: r[4] };
 }
 
-export function priceFor(model) {
+// Prix du modèle pour un tour de promptTokens tokens de prompt (0 : prix de base).
+export function priceFor(model, promptTokens = 0) {
   const m = String(model ?? '').toLowerCase();
   if (!m) return null;
   let best = null;
   for (const p of PRICES) if (m.startsWith(p[0]) && (!best || p[0].length > best[0].length)) best = p;
-  if (best) return row(best[0]);
-  for (const [needle, prefix] of FAMILY) if (m.includes(needle)) return row(prefix);
+  if (best) return row(best[0], promptTokens);
+  for (const [needle, prefix] of FAMILY) if (m.includes(needle)) return row(prefix, promptTokens);
   return null;
 }
