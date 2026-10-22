@@ -46,13 +46,23 @@ function row(prefix, promptTokens) {
   return { input: r[1], output: r[2], cacheRead: r[3], cacheWrite: r[4] };
 }
 
-// Prix du modèle pour un tour de promptTokens tokens de prompt (0 : prix de base).
-export function priceFor(model, promptTokens = 0) {
+// Préfixe de grille d'un modèle, ou null s'il n'a pas de prix.
+function prefixOf(model) {
   const m = String(model ?? '').toLowerCase();
   if (!m) return null;
   let best = null;
   for (const p of PRICES) if (m.startsWith(p[0]) && (!best || p[0].length > best[0].length)) best = p;
-  if (best) return row(best[0], promptTokens);
-  for (const [needle, prefix] of FAMILY) if (m.includes(needle)) return row(prefix, promptTokens);
+  if (best) return best[0];
+  for (const [needle, prefix] of FAMILY) if (m.includes(needle)) return prefix;
   return null;
+}
+
+// Préfixe résolu une fois par modèle : priceFor est appelé à chaque tour de chaque passe du what-if.
+const PREFIX_OF = new Map();
+
+// Prix du modèle pour un tour de promptTokens tokens de prompt (0 : prix de base).
+export function priceFor(model, promptTokens = 0) {
+  let prefix = PREFIX_OF.get(model);
+  if (prefix === undefined) { prefix = prefixOf(model); PREFIX_OF.set(model, prefix); }
+  return prefix ? row(prefix, promptTokens) : null;
 }
