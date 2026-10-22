@@ -33,7 +33,8 @@ and writes `~/.tokenfrugal/report.html`. Other commands:
 - Cache rebuilds after a break, by break length, and their extra cost.
 - Compactions, `/clear` restarts, and the fixed base every session starts with.
 - A what-if that replays your sessions with other habits (fixed base trimmed, switching at a context
-  threshold, switching before long breaks) and ranks the levers by what they would have saved.
+  threshold, switching before long breaks, sub-agents on a cheaper model) and ranks the levers by what
+  they would have saved.
 - Cost and key indicators by project, with a selector that narrows the whole report to one project.
 - Tool outputs: carried cost by tool (each output is paid again on every later turn until compaction), file rereads, and two what-if levers: capping text outputs and shrinking screenshots.
 - Switches: compaction versus handoff then /clear, with each switch's cost, resume size and the next 10 turns, and a one-line answer to which costs less.
