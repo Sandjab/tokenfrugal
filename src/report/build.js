@@ -12,7 +12,7 @@ const uplotDir = path.dirname(createRequire(import.meta.url).resolve('uplot'));
 // Ordre de dépendance de chaque bundle : un fichier n'importe que ceux qui le précèdent (vérifié par un test).
 export const PAGE_FILES = [
   '../model/pricing.js', '../model/cost.js', '../model/util.js', '../model/metrics.js',
-  '../model/whatif.js', '../model/recommend.js', '../model/projects.js', '../model/tools.js', './strings.js', './page.js', '../web/app.js',
+  '../model/whatif.js', '../model/recommend.js', '../model/projects.js', '../model/tools.js', '../model/switches.js', './strings.js', './page.js', '../web/app.js',
 ];
 export const WORKER_FILES = [
   '../store/sha256.js', '../read/image.js', '../read/session.js', '../read/group.js', '../store/merge.js',
