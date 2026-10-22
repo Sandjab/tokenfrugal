@@ -98,9 +98,9 @@ test('réponse : au moins 5 fenêtres complètes de chaque côté ; compactages 
 });
 
 test('phrase : le mode le moins cher, les deux coûts, l’écart, et les contextes avant ; sinon « pas assez »', () => {
-  const a = { handoff: { total: { usd: 1, wtok: 1 }, beforeMedian: 100_000 }, compact: { total: { usd: 3, wtok: 3 }, beforeMedian: 160_000 }, diff: { usd: -2, wtok: -2 } };
+  const a = { handoff: { n10: 295, total: { usd: 1, wtok: 1 }, beforeMedian: 100_000 }, compact: { n10: 24, total: { usd: 3, wtok: 3 }, beforeMedian: 160_000 }, diff: { usd: -2, wtok: -2 } };
   const s = switchAnswerText(a, 'usd');
-  assert.match(s, /^Sur vos bascules, un handoff puis \/clear coûte le moins/);
+  assert.match(s, /^Sur vos bascules, un handoff puis \/clear coûte moins/);
   assert.ok(s.includes(fmtCost({ usd: 2, wtok: 2 }, 'usd')));
   assert.match(switchAnswerText(null, 'usd'), /^Pas assez de bascules pour comparer : il faut au moins 5 /);
 });
@@ -109,4 +109,13 @@ test('liaison sur l’heure du /clear, pas sur le premier tour : /clear tapé ju
   const A = v5(session(A_TURNS), { handoff: { at: 1 } });
   const [x] = switchList([A, clearB(T + 120 + 13 * 3600, 12, { clearAt: T + 180 })]);
   assert.deepEqual([x.mode, x.t], ['handoff', T + 120 + 13 * 3600]);   // la période suit la reprise
+});
+
+test('phrase : le sens suit l’unité affichée (modèles mêlés : moins cher en $, plus cher en tokens pondérés) et dit sur combien de bascules elle repose', () => {
+  const a = { handoff: { n10: 295, total: { usd: 1, wtok: 300 }, beforeMedian: 100_000 }, compact: { n10: 24, total: { usd: 3, wtok: 200 }, beforeMedian: 160_000 }, diff: { usd: -2, wtok: 100 } };
+  assert.match(switchAnswerText(a, 'usd'), /^Sur vos bascules, un handoff puis \/clear coûte moins/);
+  const w = switchAnswerText(a, 'wtok');
+  assert.match(w, /^Sur vos bascules, un compactage coûte moins/);
+  assert.match(w, /295 bascules/);
+  assert.match(w, /24 bascules/);
 });

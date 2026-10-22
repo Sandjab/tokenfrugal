@@ -246,3 +246,14 @@ test('clearAt : heure de la commande /clear (la liaison à la session précéden
   assert.deepEqual([s.clearStart, s.clearAt], [true, T0]);
   assert.equal(read([assistant({ t: T0, input: 10, cw: 5_000 })]).clearAt, undefined);
 });
+
+test('handoff : une écriture ne compte que pour un document .md ou .txt (sinon éditer HandoverService.java serait un handoff)', () => {
+  const at = (file_path) => read([
+    assistantTool({ t: T0, id: 'm0', input: 10, cw: 5_000, uses: [['w1', 'Write', { file_path, content: 'x' }]] }),
+    assistant({ t: T0 + 1, id: 'm1', input: 10, cr: 5_000 }),
+  ]).handoff;
+  assert.equal(at('/p/src/HandoverService.java'), undefined);
+  assert.equal(at('/p/src/passation.service.ts'), undefined);
+  assert.deepEqual(at('/p/handoff.txt'), { at: 0 });
+  assert.deepEqual(at('/p/HANDOFF.MD'), { at: 0 });
+});

@@ -24,6 +24,8 @@ const CLEAR_RE = /<command-name>\/clear<\/command-name>/;
 // Commande slash ; signal de handoff (spec bascules § 3.1) : mots cherchés sans casse, aucun nom n'est gardé.
 const COMMAND_RE = /<command-name>\/([^<]*)<\/command-name>/g;
 const HANDOFF_RE = /handoff|handover|passation/i;
+// Une écriture ne compte que pour un document : éditer HandoverService.java n'est pas écrire un handoff.
+const DOC_RE = /\.(md|txt)$/i;
 const FIELDS = ['input', 'output', 'cr', 'cw', 'cw1h'];
 // Nom de projet : même exigence de format que les noms de modèle, mais un dossier peut contenir des
 // espaces ou de la ponctuation ; seuls les séparateurs et les caractères de contrôle sont exclus.
@@ -139,14 +141,14 @@ export class SessionReader {
     }
   }
 
-  // Skill handoff, ou écriture d'un fichier dont le nom (pas le dossier) contient un des mots : le signal porte
-  // sur le tour qui contient le tool_use.
+  // Skill handoff, ou écriture d'un document (.md, .txt) dont le nom (pas le dossier) contient un des mots : le
+  // signal porte sur le tour qui contient le tool_use.
   #handoffUses(content, turn) {
     for (const b of content) {
       if (!b || b.type !== 'tool_use' || !b.input) continue;
       if (b.name === 'Skill' && typeof b.input.skill === 'string' && HANDOFF_RE.test(b.input.skill)) this.handoffCmd = turn;
-      if ((b.name === 'Write' || b.name === 'Edit') && typeof b.input.file_path === 'string'
-        && HANDOFF_RE.test(b.input.file_path.split(/[\\/]/).pop())) this.handoffWrite = turn;
+      const name = (b.name === 'Write' || b.name === 'Edit') && typeof b.input.file_path === 'string' ? b.input.file_path.split(/[\\/]/).pop() : '';
+      if (HANDOFF_RE.test(name) && DOC_RE.test(name)) this.handoffWrite = turn;
     }
   }
 

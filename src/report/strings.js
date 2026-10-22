@@ -25,10 +25,14 @@ export const fmtShare = (x) => `${nf(0).format(x * 100)}${sp()}%`;
 export const fmtAxis = (v, unit) => (unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v)).replace(/\u202f/g, '\u00a0');
 export const recommendationText = (r, unit) => `${T.leverAction[r.lever](r.params)}${T.sep}−${fmtCost(r.perWeek, unit)} ${T.perWeek}`;
 // Réponse à la question du brief (spec bascules § 4.3) ; a = switchAnswer(…) ou null.
-export const switchAnswerText = (a, unit) => (a
-  ? T.switchAnswer(a.diff.usd <= 0, fmtCost(a.handoff.total, unit), fmtCost(a.compact.total, unit),
-    fmtCost({ usd: Math.abs(a.diff.usd), wtok: Math.abs(a.diff.wtok) }, unit), fmtTok(a.handoff.beforeMedian), fmtTok(a.compact.beforeMedian))
-  : T.switchNoAnswer(MIN_COMPARE));
+// Le sens suit l'unité affichée : en tokens pondérés, il peut différer du sens en $ quand les modèles diffèrent.
+export const switchAnswerText = (a, unit) => {
+  if (!a) return T.switchNoAnswer(MIN_COMPARE);
+  const d = unit === 'usd' ? a.diff.usd : a.diff.wtok;
+  return T.switchAnswer(d <= 0, fmtCost(a.handoff.total, unit), fmtCost(a.compact.total, unit),
+    fmtCost({ usd: Math.abs(a.diff.usd), wtok: Math.abs(a.diff.wtok) }, unit), fmtTok(a.handoff.beforeMedian), fmtTok(a.compact.beforeMedian),
+    a.handoff.n10, a.compact.n10);
+};
 
 const plural = (n, s, p) => (n > 1 ? p : s);   // français : 0 et 1 au singulier
 const one = (n, s, p) => (n === 1 ? s : p);       // anglais : seul 1 au singulier
@@ -74,9 +78,9 @@ export const STRINGS = {
     switches: 'Bascules',
     switchCols: ['Mode', 'Bascules (fenêtres complètes)', 'Coût moyen de la bascule', 'Coût moyen des 10 tours suivants', 'Contexte avant médian', 'Reprise médiane', 'Relecture médiane'],
     switchModes: { auto: 'Compactage automatique', manual: 'Compactage manuel (/compact)', handoff: 'Handoff puis /clear', clear: '/clear sans handoff', unknown: 'Handoff inconnu' },
-    switchAnswer: (handoffCheaper, h, c, d, hb, cb) => `Sur vos bascules, ${handoffCheaper ? 'un handoff puis /clear' : 'un compactage'} coûte le moins : ${h} en moyenne pour un handoff puis /clear, ${c} pour un compactage (bascule et 10 tours suivants), soit ${d} d’écart par bascule. Contexte avant médian : ${hb} tokens pour un handoff, ${cb} pour un compactage.`,
+    switchAnswer: (handoffCheaper, h, c, d, hb, cb, hn, cn) => `Sur vos bascules, ${handoffCheaper ? 'un handoff puis /clear' : 'un compactage'} coûte moins : ${h} en moyenne pour un handoff puis /clear (${hn} bascules), ${c} pour un compactage (${cn} bascules), bascule et 10 tours suivants compris, soit ${d} d’écart par bascule. Contexte avant médian : ${hb} tokens pour un handoff, ${cb} pour un compactage.`,
     switchNoAnswer: (n) => `Pas assez de bascules pour comparer : il faut au moins ${n} handoffs puis /clear et ${n} compactages suivis de 10 tours.`,
-    switchesNote: 'Coût d’un compactage : estimé (le tour de résumé n’apparaît pas dans les journaux). Coût d’un handoff : mesuré, des tours de la session précédente depuis le dernier skill ou la dernière commande handoff (à défaut, la dernière écriture d’un fichier dont le nom contient handoff, handover ou passation). Un /clear est relié à la session du même projet dont le dernier tour précède la commande /clear de 12 h au plus. Relecture : contexte du 10e tour moins celui de la reprise. Les modes ne basculent pas au même contexte : comparez aussi « Contexte avant ». Handoff inconnu : session précédente lue par une version antérieure.',
+    switchesNote: 'Coût d’un compactage : estimé (le tour de résumé n’apparaît pas dans les journaux). Coût d’un handoff : mesuré, des tours de la session précédente depuis le dernier skill ou la dernière commande handoff (à défaut, la dernière écriture d’un document .md ou .txt dont le nom contient handoff, handover ou passation). Un /clear est relié à la session du même projet dont le dernier tour précède la commande /clear de 12 h au plus. Relecture : contexte du 10e tour moins celui de la reprise. Les modes ne basculent pas au même contexte : comparez aussi « Contexte avant ». Handoff inconnu : session précédente lue par une version antérieure.',
     indicators: 'Indicateurs',
     ctxBucketLabels: ['Tours < 50 k', 'Tours 50–100 k', 'Tours 100–150 k', 'Tours 150–200 k', 'Tours > 200 k'],
     ind: {
@@ -211,9 +215,9 @@ export const STRINGS = {
     switches: 'Switches',
     switchCols: ['Mode', 'Switches (full windows)', 'Average switch cost', 'Average cost of the next 10 turns', 'Median context before', 'Median resume', 'Median reread'],
     switchModes: { auto: 'Automatic compaction', manual: 'Manual compaction (/compact)', handoff: 'Handoff then /clear', clear: '/clear without handoff', unknown: 'Handoff unknown' },
-    switchAnswer: (handoffCheaper, h, c, d, hb, cb) => `Across your switches, ${handoffCheaper ? 'a handoff then /clear' : 'a compaction'} costs less: ${h} on average for a handoff then /clear, ${c} for a compaction (switch and next 10 turns), a ${d} difference per switch. Median context before: ${hb} tokens for a handoff, ${cb} for a compaction.`,
+    switchAnswer: (handoffCheaper, h, c, d, hb, cb, hn, cn) => `Across your switches, ${handoffCheaper ? 'a handoff then /clear' : 'a compaction'} costs less: ${h} on average for a handoff then /clear (${hn} switches), ${c} for a compaction (${cn} switches), switch and next 10 turns included, a ${d} difference per switch. Median context before: ${hb} tokens for a handoff, ${cb} for a compaction.`,
     switchNoAnswer: (n) => `Not enough switches to compare: at least ${n} handoffs then /clear and ${n} compactions followed by 10 turns are needed.`,
-    switchesNote: 'Compaction cost: estimated (the summary turn does not appear in the logs). Handoff cost: measured, from the previous session’s turns since the last handoff skill or command (else the last write of a file whose name contains handoff, handover or passation). A /clear is linked to the session of the same project whose last turn is at most 12 h before the /clear command. Reread: context of the 10th turn minus the resume. Modes do not switch at the same context: compare “Context before” too. Handoff unknown: previous session read by an earlier version.',
+    switchesNote: 'Compaction cost: estimated (the summary turn does not appear in the logs). Handoff cost: measured, from the previous session’s turns since the last handoff skill or command (else the last write of a .md or .txt document whose name contains handoff, handover or passation). A /clear is linked to the session of the same project whose last turn is at most 12 h before the /clear command. Reread: context of the 10th turn minus the resume. Modes do not switch at the same context: compare “Context before” too. Handoff unknown: previous session read by an earlier version.',
     indicators: 'Indicators',
     ctxBucketLabels: ['Turns < 50k', 'Turns 50–100k', 'Turns 100–150k', 'Turns 150–200k', 'Turns > 200k'],
     ind: {
