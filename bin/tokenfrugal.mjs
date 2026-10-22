@@ -8,8 +8,9 @@ import path from 'node:path';
 import { collect, loadSessions, exportHistory, importHistory } from '../src/store/store.js';
 import { buildReport } from '../src/report/build.js';
 import { recommend } from '../src/model/recommend.js';
+import { switchList, switchAnswer } from '../src/model/switches.js';
 import { ANALYZER_VERSION } from '../src/read/session.js';
-import { T, recommendationText, setLang, getLang } from '../src/report/strings.js';
+import { T, recommendationText, switchAnswerText, setLang, getLang } from '../src/report/strings.js';
 
 // Langue du CLI : --lang, sinon LC_ALL ou LANG (fr… → français), sinon anglais (spec web § 7.2).
 const envLang = () => (/^fr/i.test(process.env.LC_ALL || process.env.LANG || '') ? 'fr' : 'en');
@@ -56,6 +57,7 @@ async function main(argv) {
     console.log(T.cli.recommendations);
     if (!recos.length) console.log(`  ${T.cli.noRecommendation}`);
     for (const [i, r] of recos.entries()) console.log(`  ${i + 1}. ${recommendationText(r, 'usd')}`);
+    console.log(switchAnswerText(switchAnswer(switchList(sessions)), 'usd'));
     console.log(T.cli.reportWritten(file));
     if (values.open) openFile(file);
   }

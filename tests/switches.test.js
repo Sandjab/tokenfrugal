@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { switchList, switchSummary, switchAnswer } from '../src/model/switches.js';
 import { session, near } from './helpers/model.js';
+import { switchAnswerText, fmtCost } from '../src/report/strings.js';
 
 // Tokens pondérés (opus-4-6) : entrée 1, cache lu 0,1, écrit 5 min 1,25, sortie 5.
 const T = 1_792_000_000;
@@ -94,4 +95,12 @@ test('réponse : au moins 5 fenêtres complètes de chaque côté ; compactages 
   const a = switchAnswer([...hs, ...cs]);
   assert.deepEqual([a.handoff.total.wtok, a.compact.total.wtok, a.diff.wtok], [42_000, 70_000, -28_000]);
   assert.deepEqual([a.handoff.beforeMedian, a.compact.beforeMedian], [100_000, 160_000]);
+});
+
+test('phrase : le mode le moins cher, les deux coûts, l’écart, et les contextes avant ; sinon « pas assez »', () => {
+  const a = { handoff: { total: { usd: 1, wtok: 1 }, beforeMedian: 100_000 }, compact: { total: { usd: 3, wtok: 3 }, beforeMedian: 160_000 }, diff: { usd: -2, wtok: -2 } };
+  const s = switchAnswerText(a, 'usd');
+  assert.match(s, /^Sur vos bascules, un handoff puis \/clear coûte le moins/);
+  assert.ok(s.includes(fmtCost({ usd: 2, wtok: 2 }, 'usd')));
+  assert.match(switchAnswerText(null, 'usd'), /^Pas assez de bascules pour comparer : il faut au moins 5 /);
 });

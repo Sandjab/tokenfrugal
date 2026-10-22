@@ -7,7 +7,8 @@ import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../mode
 import { recommend } from '../model/recommend.js';
 import { byProject, projectLabels } from '../model/projects.js';
 import { toolCosts } from '../model/tools.js';
-import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, setLang, getLang, pickLang } from './strings.js';
+import { switchList, switchSummary, switchAnswer } from '../model/switches.js';
+import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, switchAnswerText, setLang, getLang, pickLang } from './strings.js';
 
 const LANG_KEY = 'tokenfrugal-lang';
 const SLIDERS = [
@@ -25,6 +26,7 @@ const SLIDERS = [
 let DATA, ALL, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, PROJECTS, LABELS, state, afterRender = null;
 let projectRows = null;   // { period, rows } : le tableau « Par projet » ne dépend que de la période
 let toolRows = null;      // { key, r } : le bloc « Sorties d'outils » dépend de la période et du projet
+let switchCache = null;   // { project, list } : la liste des bascules ne dépend que du projet
 const ALL_ON = () => ({ threshold: true, pauseSwitchMin: true, textCap: true, imageCap: true });
 const charts = new Map();
 let pending = false;
@@ -74,6 +76,7 @@ export function renderReport(data, onRender = null) {
   LABELS = projectLabels(PROJECTS);
   projectRows = null;
   toolRows = null;
+  switchCache = null;
   OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
   state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: ALL_ON(), cache1h: false };
   afterRender = onRender;
@@ -112,6 +115,7 @@ function renderAll() {
   renderProjects();
   renderIndicators();
   renderTools();
+  renderSwitches();
   buildWhatIf();
   if (lastWhatIf) showWhatIf(); else updateWhatIf();
   if (lastSweep) showSweep();
@@ -277,6 +281,19 @@ function renderTools() {
     <p class="note">${T.toolsNote}</p>`;
 }
 
+// Bascules sur la période et le projet choisis (spec bascules § 5.1).
+function renderSwitches() {
+  if (switchCache?.project !== state.project) switchCache = { project: state.project, list: switchList(SESSIONS) };
+  const r = range(), rows = switchSummary(switchCache.list, r);
+  const tok = (x) => (x === null ? '—' : fmtTok(x));
+  $('switches').innerHTML = `<h2>${T.switches}</h2><p>${switchAnswerText(switchAnswer(switchCache.list, r), state.unit)}</p>
+    <div class="scroll"><table><thead><tr>${T.switchCols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map((x) => `<tr><th scope="row">${T.switchModes[x.mode]}</th><td>${x.n} (${x.n10})</td><td>${money(x.cost)}</td>
+      <td>${x.win10 ? money(x.win10) : '—'}</td><td>${tok(x.beforeMedian)}</td><td>${tok(x.repriseMedian)}</td><td>${tok(x.rereadMedian)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="note">${T.switchesNote}</p>`;
+}
+
 function hypNote(key) {
   if (key === 'P') return T.hyp.guess;
   return HYP.measured[key] ? T.hyp.measured(HYP.measured[key]) : T.hyp.fallback;
@@ -405,6 +422,7 @@ function renderUnit() {
   renderProjects();
   renderIndicators();
   renderTools();
+  renderSwitches();
   showWhatIf();
   showSweep();
 }

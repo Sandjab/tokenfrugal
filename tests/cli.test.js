@@ -28,6 +28,7 @@ test('report : relève, écrit la page, affiche recommandations et chemin', () =
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /1 sessions trouvées, 1 lues, 1 ligne ignorée,/);
   assert.match(r.stdout, /Quoi changer en premier/);
+  assert.match(r.stdout, /Pas assez de bascules pour comparer/);
   assert.match(r.stdout, /Page écrite/);
   assert.ok(existsSync(path.join(store, 'report.html')));
   // date de génération embarquée : la page en déduit la semaine en cours, incomplète (spec § 8)

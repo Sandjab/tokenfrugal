@@ -5,10 +5,10 @@ import { pathToFileURL } from 'node:url';
 import { collect, loadSessions } from '../../src/store/store.js';
 import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
-import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults } from '../helpers/logs.js';
+import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults, clearLines } from '../helpers/logs.js';
 import { session } from '../helpers/model.js';
 
-let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl;
+let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl, switchesUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -78,6 +78,17 @@ test.beforeAll(async () => {
   const toolsFile = path.join(storeT, 'report.html');
   writeFileSync(toolsFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeT) }));
   toolsUrl = pathToFileURL(toolsFile).href;
+  // Bascules : une session qui lance /handoff, puis une session /clear du même projet 1 min après sa fin.
+  const ho = [user({ t: T0, cwd: '/home/u/bascules' }), assistant({ t: T0 + 5, id: 'h0', input: 10, cw: 30_000, output: 100 }),
+    user({ t: T0 + 10, text: '<command-name>/handoff</command-name>', cwd: '/home/u/bascules' }),
+    assistant({ t: T0 + 15, id: 'h1', input: 10, cr: 30_000, cw: 2_000, output: 2_000 })];
+  const rep = [...clearLines(T0 + 75), user({ t: T0 + 76, cwd: '/home/u/bascules' })];
+  for (let i = 0; i < 12; i++) rep.push(assistant({ t: T0 + 80 + 60 * i, id: `r${i}`, input: 10, cr: i ? 20_000 : 0, cw: i ? 1_000 : 20_000, output: 100 }));
+  const storeS = tmpStore();
+  await collect({ projectsDir: writeProjects({ 'p-bascules': { a1: { main: ho }, b1: { main: rep } }, 'p-plain': { q1: proj('/home/u/plain', T0 + 7200, 30_000) } }), storeDir: storeS });
+  const switchesFile = path.join(storeS, 'report.html');
+  writeFileSync(switchesFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeS) }));
+  switchesUrl = pathToFileURL(switchesFile).href;
 });
 
 test('aucune requête réseau, aucune erreur JavaScript', async ({ page }) => {
@@ -332,4 +343,12 @@ test('curseur du plafond texte : couper le levier change le coût simulé ; note
   await expect(page.locator('#wi-sim')).not.toHaveText(before);
   await expect(page.locator('#whatif')).toContainText('Gain optimiste');
   await expect(page.locator('#sl-imageCap')).toHaveAttribute('max', '4784');
+});
+
+test('bascules : ligne « Handoff puis /clear », phrase de réponse ; filtre par projet appliqué', async ({ page }) => {
+  await page.goto(switchesUrl);
+  await expect(page.locator('#switches tbody th', { hasText: 'Handoff puis /clear' })).toHaveCount(1);
+  await expect(page.locator('#switches')).toContainText('Pas assez de bascules pour comparer');
+  await page.selectOption('#project', { label: 'plain' });
+  await expect(page.locator('#switches tbody th', { hasText: 'Handoff puis /clear' })).toHaveCount(0);
 });
