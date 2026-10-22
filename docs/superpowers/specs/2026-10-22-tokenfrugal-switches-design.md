@@ -37,7 +37,8 @@ Fichier principal seulement. Les mots sont cherchés sans casse : `/handoff|hand
   contient un des mots.
 - **Skill** : un bloc `tool_use` de nom `Skill` dont `input.skill` (chaîne) contient un des mots.
 - **Écriture** : un bloc `tool_use` `Write` ou `Edit` dont le **nom de fichier** (dernier segment de
-  `input.file_path`) contient un des mots.
+  `input.file_path`) contient un des mots et finit par `.md` ou `.txt` : éditer `HandoverService.java`
+  n'est pas écrire un handoff (révisé à la revue finale du 22 oct. 2026).
 
 ### 3.2 Début du handoff
 
@@ -111,9 +112,10 @@ que le reste de la page), puis rend par mode, dans l'ordre `auto`, `manual`, `ha
 
 `switchAnswer(summary)` compare `handoff` et compactage (`auto` et `manual` réunis : moyenne pondérée
 par `n10` pour `win10`, par `n` pour `cost`) sur `cost + win10`, si chacun a au moins 5 fenêtres
-complètes. Elle rend `{ handoff, compact, diff }` ou `null`. La phrase (§ 5.2) dit lequel coûte le
-moins et de combien, et rappelle les contextes avant médians ; à défaut, qu'il n'y a pas assez de
-bascules pour comparer.
+complètes. Elle rend `{ handoff, compact, diff }` ou `null`. La phrase (§ 5.2) dit lequel coûte moins
+et de combien, sur combien de bascules de chaque côté, et rappelle les contextes avant médians ; à
+défaut, qu'il n'y a pas assez de bascules pour comparer. Le sens suit l'unité affichée : en tokens
+pondérés, il peut différer du sens en $ quand les deux côtés n'utilisent pas les mêmes modèles.
 
 ## 5. Sorties
 
