@@ -101,11 +101,12 @@ export const STRINGS = {
     enable: 'Activer',
     lever: {
       socleCut: 'Socle fixe allégé de', threshold: 'Basculer dès un contexte de', pauseSwitchMin: 'Basculer avant une pause de plus de',
-      cache1h: 'Cache 1 h au lieu de 5 min', R: 'Hypothèse R : taille de reprise', S: 'Hypothèse S : taille du résumé', P: 'Hypothèse P : pénalité de reprise',
+      cache1h: 'Cache 1 h au lieu de 5 min', subModel: 'Sous-agents sur Sonnet 5.5', R: 'Hypothèse R : taille de reprise', S: 'Hypothèse S : taille du résumé', P: 'Hypothèse P : pénalité de reprise',
       textCap: 'Plafond des sorties texte d’outils', imageCap: 'Plafond des images',
     },
     thresholdInactive: 'Sans effet : après une bascule, le contexte repartirait de R + P, qui n’est pas sous ce seuil.',
     capOptimistic: 'Gain optimiste : une sortie tronquée ou une image réduite peut demander un appel de plus, non compté.',
+    subModelNote: 'Gain hors qualité : un modèle plus petit peut moins bien faire le travail.',
     hyp: {
       measured: (n) => `mesuré sur ${n} cas`, fallback: 'valeur par défaut faute de mesure', guess: 'supposition, à ajuster',
       pause1h: (share) => `60 min : vos écritures en cache sont en TTL 1 h (${share})`, pause5m: '15 min : cache de 5 min',
@@ -239,11 +240,12 @@ export const STRINGS = {
     enable: 'Enable',
     lever: {
       socleCut: 'Fixed base trimmed by', threshold: 'Switch from a context of', pauseSwitchMin: 'Switch before a break longer than',
-      cache1h: '1-hour cache instead of 5 min', R: 'Assumption R: resume size', S: 'Assumption S: summary size', P: 'Assumption P: resume penalty',
+      cache1h: '1-hour cache instead of 5 min', subModel: 'Sub-agents on Sonnet 5.5', R: 'Assumption R: resume size', S: 'Assumption S: summary size', P: 'Assumption P: resume penalty',
       textCap: 'Tool text output cap', imageCap: 'Image cap',
     },
     thresholdInactive: 'No effect: after a switch the context would restart from R + P, which is not below this threshold.',
     capOptimistic: 'Optimistic gain: a truncated output or a smaller image may take one more call, not counted.',
+    subModelNote: 'Gain excludes quality: a smaller model may do the work less well.',
     hyp: {
       measured: (n) => `measured on ${n} cases`, fallback: 'default value, nothing to measure', guess: 'assumption, adjust it',
       pause1h: (share) => `60 min: your cache writes use a 1-hour TTL (${share})`, pause5m: '15 min: 5-minute cache',

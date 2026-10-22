@@ -8,7 +8,7 @@ import { ANALYZER_VERSION } from '../../src/read/session.js';
 import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults, clearLines } from '../helpers/logs.js';
 import { session } from '../helpers/model.js';
 
-let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl, switchesUrl;
+let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl, switchesUrl, subUrl;
 
 test.beforeAll(async () => {
   // 30 tours dont le contexte grossit de 8 000 à chaque fois, avec une pause de 20 min au milieu
@@ -89,6 +89,16 @@ test.beforeAll(async () => {
   const switchesFile = path.join(storeS, 'report.html');
   writeFileSync(switchesFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeS) }));
   switchesUrl = pathToFileURL(switchesFile).href;
+  // Sous-agents sur Opus : le levier « Sous-agents sur Sonnet 5.5 » a de quoi agir.
+  const subMain = [user({ t: T0 }), assistant({ t: T0 + 5, id: 's0', input: 10, cw: 30_000, output: 100 }),
+    assistant({ t: T0 + 65, id: 's1', input: 10, cr: 30_000, cw: 1_000, output: 100 })];
+  const subLines = [assistant({ t: T0 + 20, id: 'g0', input: 10, cw: 50_000, output: 2_000 }),
+    assistant({ t: T0 + 40, id: 'g1', input: 10, cr: 50_000, cw: 5_000, output: 2_000 })];
+  const storeG = tmpStore();
+  await collect({ projectsDir: writeProjects({ 'p-sub': { g1: { main: subMain, subs: { 'agent-e2e.jsonl': subLines } } } }), storeDir: storeG });
+  const subFile = path.join(storeG, 'report.html');
+  writeFileSync(subFile, buildReport({ analyzer: ANALYZER_VERSION, sessions: await loadSessions(storeG) }));
+  subUrl = pathToFileURL(subFile).href;
 });
 
 test('aucune requête réseau, aucune erreur JavaScript', async ({ page }) => {
@@ -351,4 +361,18 @@ test('bascules : ligne « Handoff puis /clear », phrase de réponse ; filtre pa
   await expect(page.locator('#switches')).toContainText('Pas assez de bascules pour comparer');
   await page.selectOption('#project', { label: 'plain' });
   await expect(page.locator('#switches tbody th', { hasText: 'Handoff puis /clear' })).toHaveCount(0);
+});
+
+test('case « Sous-agents sur Sonnet 5.5 » : la décocher change le coût simulé ; « Habitudes réelles » la décoche, « Tous les leviers » la coche', async ({ page }) => {
+  await page.goto(subUrl);
+  await expect(page.locator('#cb-subModel')).toBeChecked();
+  await expect(page.locator('#whatif')).toContainText('Gain hors qualité');
+  const before = await page.locator('#wi-sim').textContent();
+  await page.uncheck('#cb-subModel');
+  await expect(page.locator('#wi-sim')).not.toHaveText(before);
+  await page.check('#cb-subModel');
+  await page.click('#wi-neutral');
+  await expect(page.locator('#cb-subModel')).not.toBeChecked();
+  await page.click('#wi-optimum');
+  await expect(page.locator('#cb-subModel')).toBeChecked();
 });

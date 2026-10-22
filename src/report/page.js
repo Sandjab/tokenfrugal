@@ -78,7 +78,7 @@ export function renderReport(data, onRender = null) {
   toolRows = null;
   switchCache = null;
   OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
-  state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: ALL_ON(), cache1h: false };
+  state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: ALL_ON(), cache1h: false, subModel: true };
   afterRender = onRender;
   selectSessions();
   resetResults();
@@ -135,7 +135,7 @@ function periodWeeks() {
   return weeksIn(WEEKS, range());
 }
 function params() {
-  const p = { cache1h: state.cache1h };
+  const p = { cache1h: state.cache1h, subModel: state.subModel ? DEFAULTS.subModel : null };
   for (const s of SLIDERS) p[s.key] = s.toggle && !state.on[s.key] ? Infinity : state.values[s.key];
   return p;
 }
@@ -322,6 +322,7 @@ function buildWhatIf() {
     <p><button id="wi-optimum">${T.optimum}</button> <button id="wi-neutral">${T.neutral}</button></p>
     <div class="sliders">${SLIDERS.map(sliderHtml).join('')}
       <label><input type="checkbox" id="cb-cache1h" ${state.cache1h ? 'checked' : ''}> ${T.lever.cache1h}</label>
+      <label><input type="checkbox" id="cb-subModel" ${state.subModel ? 'checked' : ''}> ${T.lever.subModel} <small>${T.subModelNote}</small></label>
     </div>
     <div class="result">
       <div><span>${T.realCorrected}</span><strong id="wi-real"></strong></div>
@@ -341,16 +342,18 @@ function buildWhatIf() {
     if (s.toggle) $(`on-${s.key}`).onchange = (e) => { state.on[s.key] = e.target.checked; updateWhatIf(); updateSweep(); };
   }
   $('cb-cache1h').onchange = (e) => { state.cache1h = e.target.checked; updateWhatIf(); updateSweep(); };
-  const preset = (values, on) => {
+  $('cb-subModel').onchange = (e) => { state.subModel = e.target.checked; updateWhatIf(); updateSweep(); };
+  const preset = (values, on, subModel) => {
     state.values = values;
     state.on = on;
     state.cache1h = false;
+    state.subModel = subModel;
     buildWhatIf();
     updateWhatIf();
     updateSweep();
   };
-  $('wi-optimum').onclick = () => preset({ ...OPTIMUM }, ALL_ON());
-  $('wi-neutral').onclick = () => preset({ ...state.values, socleCut: 0 }, { threshold: false, pauseSwitchMin: false, textCap: false, imageCap: false });
+  $('wi-optimum').onclick = () => preset({ ...OPTIMUM }, ALL_ON(), true);
+  $('wi-neutral').onclick = () => preset({ ...state.values, socleCut: 0 }, { threshold: false, pauseSwitchMin: false, textCap: false, imageCap: false }, false);
 }
 
 function scheduleWhatIf() {
