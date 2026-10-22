@@ -47,7 +47,9 @@ Constat préalable (relevé du 22 oct. 2026, chiffres dans `private/`) :
 
 `LEVERS` gagne `subModel: { subModel: DEFAULTS.subModel }`, rejoué seul sur les 4 semaines qui
 précèdent le dernier tour, comme les autres. Phrase :
-« Passer les sous-agents sur Sonnet 5.5 (champ model des agents), gain hors qualité ».
+« Passer les sous-agents sur Sonnet 5.5 (variable CLAUDE_CODE_SUBAGENT_MODEL, ou champ model d'un agent), gain
+hors qualité ». La variable vaut pour tous les sous-agents, agents intégrés compris ; le champ `model`
+d'un agent ne vaut que pour lui (doc Claude Code, sous-agents, lue le 22 oct. 2026).
 
 ## 5. Page
 

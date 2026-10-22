@@ -104,5 +104,5 @@ test('sous-agents sur Sonnet 5.5 : recommandé quand des sous-agents tournent su
 test('phrase du levier sous-agents : modèle cible et gain hors qualité', () => {
   const pw = { usd: 3, wtok: 1 };
   assert.equal(recommendationText({ lever: 'subModel', params: { subModel: 'claude-sonnet-5-5' }, perWeek: pw }, 'usd'),
-    `Passer les sous-agents sur Sonnet 5.5 (champ model des agents), gain hors qualité : −${fmtCost(pw, 'usd')} par semaine`);
+    `Passer les sous-agents sur Sonnet 5.5 (variable CLAUDE_CODE_SUBAGENT_MODEL, ou champ model d’un agent), gain hors qualité : −${fmtCost(pw, 'usd')} par semaine`);
 });
