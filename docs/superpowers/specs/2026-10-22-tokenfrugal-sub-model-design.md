@@ -32,8 +32,12 @@ Constat préalable (relevé du 22 oct. 2026, chiffres dans `private/`) :
 - Nouveau paramètre `subModel` : `null` (neutre, dans `NEUTRAL`) ou un identifiant de modèle.
   `DEFAULTS.subModel = 'claude-sonnet-5-5'`.
 - Tour de sous-agent tarifé : coût simulé = le moins cher de son coût réel et de son coût aux prix de
-  `subModel`, avec les mêmes parts (entrée, sortie, cache lu, cache écrit 5 min et 1 h). Un sous-agent
-  déjà sur un modèle moins cher garde son coût. Tour sans prix : inchangé.
+  `subModel`, avec les mêmes parts (entrée, sortie, cache lu, cache écrit 5 min et 1 h), comparés en $.
+  Un sous-agent déjà sur un modèle moins cher garde son coût. Tour sans prix : inchangé.
+- Tokens pondérés du tour simulé : ceux du tour réel × (coût en $ sur `subModel` / coût réel en $). Un
+  token pondéré se rapporte au prix d'entrée de son propre modèle (`cost.js`) : recalculé sur le modèle
+  cible, il ne changerait pas, et le levier n'aurait aucun effet dans cette unité. On l'exprime donc dans
+  l'unité du modèle réel : un sous-agent sur Sonnet consomme moins qu'un sous-agent sur Opus.
 - Aucune perte de cache à compter : chaque sous-agent a son propre contexte, et tout le sous-agent
   passe sur le modèle cible ; ce qu'il rend à la session principale ne change pas.
 - Les tours principaux, compactages et bascules ne changent pas.
@@ -62,8 +66,9 @@ Rien de nouveau n'est relevé ni stocké. `ANALYZER_VERSION` ne change pas.
 Chaque test dit pourquoi le comportement compte.
 
 - Neutre (`subModel: null`) sur une session avec sous-agents : simulé = réel.
-- Session calculée à la main avec des sous-agents sur Opus 4.6, Sonnet 4.6 et Haiku 4.5 : seul celui
-  sur Opus baisse, au prix de Sonnet 5.5 ; les tours principaux ne changent pas.
+- Session calculée à la main avec des sous-agents sur Opus 4.6, Sonnet 4.6 et Haiku 4.5 : les deux
+  premiers baissent au prix de Sonnet 5.5 (en $ et en tokens pondérés), celui sur Haiku 4.5, moins cher,
+  ne change pas ; les tours principaux ne changent pas.
 - Recommandation présente quand des sous-agents tournent sur un modèle plus cher, absente sinon ;
   phrase.
 - e2e : la case change le coût simulé ; « Habitudes réelles » la décoche.
