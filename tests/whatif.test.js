@@ -340,3 +340,11 @@ test('sous-agent sur un modèle sans prix : inchangé et compté comme sans prix
   const r = whatIf([{ ...SUBS, models: ['claude-opus-4-6', 'modele-inconnu', 'claude-haiku-4-5'] }], { subModel: 'claude-sonnet-5-5' });
   assert.equal(r.unpriced, 1);   // le seul tour sur le modèle inconnu
 });
+
+test('sous-agent Haiku 5.5 au-delà de 100 000 tokens : réel au palier, jamais plus cher sur Sonnet 5.5', () => {
+  // principal : 10 × 0,1 + 2000 × 0,125 = 251 ; sous-agent (prompt 120 010) : 10 × 0,5 + 120 000 × 0,625 + 500 × 2,5 = 76 255
+  const s = session([{ t: T, in: 10, cw: 2000 }, { t: T + 30, in: 10, cw: 120_000, out: 500, sub: 1 }], { model: 'claude-haiku-5-5' });
+  const r = whatIf([s], { subModel: 'claude-sonnet-5-5' });
+  assert.ok(near(r.real.usd, (251 + 76_255) / 1e6));
+  assert.deepEqual([r.sim.usd, r.sim.wtok], [r.real.usd, r.real.wtok]);
+});

@@ -53,6 +53,15 @@ test('cache 1 h écrit puis jamais relu dans l’heure : compté et chiffré', (
   assert.equal(weekly([read])[0].cache1hNeverRead, 0);
 });
 
+test('cache 1 h jamais relu d’un tour Haiku 5.5 au-delà de 100 000 tokens : prix du palier', () => {
+  // prompt 10 + 100 000 écrits (dont 10 000 en 1 h) > 100 000 : 1 h à 1 $/M, soit 10 000 × 1 / 0,1 pondérés
+  const s = session([{ t: T0, in: 10, cw: 100_000, cw1h: 10_000 }, { t: T0 + 4000, cw: 12_000 }], { model: 'claude-haiku-5-5' });
+  const [w] = weekly([s]);
+  assert.equal(w.cache1hNeverRead, 10_000);
+  assert.ok(near(w.cache1hNeverReadCost.usd, 10_000 * 1 / 1e6));
+  assert.ok(near(w.cache1hNeverReadCost.wtok, 100_000));
+});
+
 test('modèle sans prix : compté à part, sans coût', () => {
   const [w] = weekly([session([{ t: T0, in: 10, cw: 1000 }], { model: 'gpt-x' })]);
   assert.equal(w.unpriced, 1);

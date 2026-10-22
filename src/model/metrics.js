@@ -51,7 +51,7 @@ export function weekly(sessions) {
       }
       const w1h = Math.min(s.cw1h[i], s.cw[i]), next = main[k + 1];
       if (w1h > 0 && (next === undefined || s.t[next] - s.t[i] > 3600)) {
-        const c = costOf({ input: 0, output: 0, cr: 0, cw5: 0, cw1h: w1h }, model);
+        const c = costOf({ input: 0, output: 0, cr: 0, cw5: 0, cw1h: w1h }, model, s.in[i] + s.cr[i] + s.cw[i]);
         if (c) { w.cache1hNeverRead += w1h; add(w.cache1hNeverReadCost, c); }
       }
     }
