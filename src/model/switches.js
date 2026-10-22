@@ -6,7 +6,10 @@ import { ctxOf, mainIndexes, median, zero, add } from './util.js';
 import { summaryCost } from './whatif.js';
 
 export const WINDOW = 10;           // tours principaux comparés après une bascule
-export const LINK_GAP = 30 * 60;    // secondes entre la fin d'une session et le /clear qu'elle précède
+// Secondes entre le dernier tour d'une session et le /clear tapé dedans : /clear se tape dans la session précédente,
+// la fenêtre ne protège que d'une précédente absente des journaux (relevé du 22 oct. 2026 : tous les handoffs suivis
+// d'un /clear l'étaient en moins de 12 h).
+export const LINK_GAP = 12 * 3600;
 export const MIN_COMPARE = 5;       // fenêtres complètes par côté pour répondre
 export const MODES = ['auto', 'manual', 'handoff', 'clear', 'unknown'];
 const HANDOFF_VERSION = 5;          // première version du lecteur qui relève le début du handoff
@@ -54,8 +57,9 @@ export function switchList(sessions) {
     }
   }
 
-  // /clear : session précédente du même projet, finie au plus 30 min avant, la plus proche ; elle ne précède
-  // qu'un /clear, le premier.
+  // /clear : session précédente du même projet, finie au plus 12 h avant la commande /clear (à défaut, avant le
+  // premier tour), la plus proche ; elle ne précède qu'un /clear, le premier.
+  const linkAt = (s) => s.clearAt ?? first(s);
   const byProject = new Map();
   for (const s of sessions) {
     const id = s.project?.id;
@@ -64,9 +68,9 @@ export function switchList(sessions) {
     byProject.get(id).push(s);
   }
   const used = new Set();
-  const clears = sessions.filter((s) => s.clearStart && mainOf.get(s).length).sort((a, b) => first(a) - first(b));
+  const clears = sessions.filter((s) => s.clearStart && mainOf.get(s).length).sort((a, b) => linkAt(a) - linkAt(b));
   for (const b of clears) {
-    const tb = first(b);
+    const tb = linkAt(b);
     let a = null;
     for (const x of byProject.get(b.project?.id) || []) {
       if (x === b || last(x) > tb || tb - last(x) > LINK_GAP) continue;
@@ -81,7 +85,7 @@ export function switchList(sessions) {
       for (const i of mainOf.get(a)) if (i >= a.handoff.at) add(cost, fullCost(a, i));
     } else if (a && a.analyzer < HANDOFF_VERSION) mode = 'unknown';
     const bm = mainOf.get(b);
-    out.push({ mode, t: tb, cost, before: a ? ctxOf(a, mainOf.get(a).at(-1)) : null, reprise: ctxOf(b, bm[0]), win: windowOf(b, bm, 0) });
+    out.push({ mode, t: first(b), cost, before: a ? ctxOf(a, mainOf.get(a).at(-1)) : null, reprise: ctxOf(b, bm[0]), win: windowOf(b, bm, 0) });
   }
   return out;
 }

@@ -25,11 +25,11 @@ test('handoff puis /clear : coût mesuré de la session précédente depuis le d
   assert.ok(near(x.win.cost.wtok, 57_950));
 });
 
-test('liaison : 29 min oui, 31 min non, autre projet non, projet inconnu non (sinon un handoff d’ailleurs serait attribué)', () => {
+test('liaison : 11 h 59 oui, 12 h 01 non, autre projet non, projet inconnu non (sinon un handoff d’ailleurs serait attribué)', () => {
   const A = v5(session(A_TURNS), { handoff: { at: 1 } });
   const mode = (b, a = A) => switchList([a, b]).find((x) => x.t === b.t[0]).mode;
-  assert.equal(mode(clearB(T + 120 + 29 * 60)), 'handoff');
-  assert.equal(mode(clearB(T + 120 + 31 * 60)), 'clear');
+  assert.equal(mode(clearB(T + 120 + 719 * 60)), 'handoff');
+  assert.equal(mode(clearB(T + 120 + 721 * 60)), 'clear');
   assert.equal(mode(clearB(T + 180, 12, { project: { id: 'autre' } })), 'clear');
   assert.equal(mode(clearB(T + 180, 12, { project: {} }), { ...A, project: {} }), 'clear');
 });
@@ -103,4 +103,10 @@ test('phrase : le mode le moins cher, les deux coûts, l’écart, et les contex
   assert.match(s, /^Sur vos bascules, un handoff puis \/clear coûte le moins/);
   assert.ok(s.includes(fmtCost({ usd: 2, wtok: 2 }, 'usd')));
   assert.match(switchAnswerText(null, 'usd'), /^Pas assez de bascules pour comparer : il faut au moins 5 /);
+});
+
+test('liaison sur l’heure du /clear, pas sur le premier tour : /clear tapé juste après le handoff, première consigne 13 h plus tard', () => {
+  const A = v5(session(A_TURNS), { handoff: { at: 1 } });
+  const [x] = switchList([A, clearB(T + 120 + 13 * 3600, 12, { clearAt: T + 180 })]);
+  assert.deepEqual([x.mode, x.t], ['handoff', T + 120 + 13 * 3600]);   // la période suit la reprise
 });

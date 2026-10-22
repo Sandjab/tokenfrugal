@@ -58,6 +58,7 @@ export class SessionReader {
     this.events = [];
     this.ignored = {};
     this.clearStart = false;
+    this.clearAt = undefined;   // heure de la commande /clear : la liaison à la session précédente se fait sur elle
     this.sawMainTurn = false;
     this.kind = 'main';
     this.byKey = new Map();
@@ -89,7 +90,7 @@ export class SessionReader {
     const ts = typeof o.timestamp === 'string' ? Date.parse(o.timestamp) : NaN;
     switch (o.type) {
       case 'assistant': this.#assistant(o, ts); return;
-      case 'user': this.#user(o); return;
+      case 'user': this.#user(o, ts); return;
       case 'system': if (o.subtype === 'compact_boundary') this.#compact(o, ts); return;
       default:
         if (!UNUSED_TYPES.has(o.type)) this.#ignore(typeof o.type === 'string' && TYPE_RE.test(o.type) ? o.type : 'other');
@@ -97,14 +98,17 @@ export class SessionReader {
   }
 
   // /clear ouvre un nouveau fichier ; la commande précède le premier tour (brief, formats observés).
-  #user(o) {
+  #user(o, ts) {
     if (this.kind !== 'main') return;
     const c = o.message && o.message.content;
     if (Array.isArray(c)) for (const b of c) if (b && b.type === 'tool_result') this.#toolResult(b);
     const text = typeof c === 'string' ? c
       : Array.isArray(c) ? c.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n') : '';
     for (const m of text.matchAll(COMMAND_RE)) if (HANDOFF_RE.test(m[1])) this.handoffCmd = this.turns.length;
-    if (!this.sawMainTurn && !this.clearStart && CLEAR_RE.test(text)) this.clearStart = true;
+    if (!this.sawMainTurn && !this.clearStart && CLEAR_RE.test(text)) {
+      this.clearStart = true;
+      if (!Number.isNaN(ts)) this.clearAt = Math.floor(ts / 1000);
+    }
   }
 
   // Sortie rattachée au prochain tour lu (next), pas à l'heure : le tour qui l'a demandée peut porter la
@@ -195,6 +199,7 @@ export class SessionReader {
       events: [...this.events].sort((a, b) => a.t - b.t), ignored: { ...this.ignored },
       project: this.projectName === undefined ? {} : { name: this.projectName },
     };
+    if (this.clearAt !== undefined) s.clearAt = this.clearAt;
     for (const x of turns) {
       if (!idx.has(x.model)) { idx.set(x.model, models.length); models.push(x.model); }
       s.t.push(x.t); s.m.push(idx.get(x.model));

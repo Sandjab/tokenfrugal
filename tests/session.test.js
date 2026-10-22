@@ -240,3 +240,9 @@ test('handoff : commande en fin de fichier sans tour principal après elle → i
   ]]);
   assert.deepEqual(s.handoff, { at: 1 });
 });
+
+test('clearAt : heure de la commande /clear (la liaison à la session précédente se fait sur elle, la première consigne peut venir bien plus tard)', () => {
+  const s = read([...clearLines(T0), assistant({ t: T0 + 3_600, input: 10, cw: 5_000 })]);
+  assert.deepEqual([s.clearStart, s.clearAt], [true, T0]);
+  assert.equal(read([assistant({ t: T0, input: 10, cw: 5_000 })]).clearAt, undefined);
+});
