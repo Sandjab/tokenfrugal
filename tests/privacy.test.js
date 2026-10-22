@@ -18,6 +18,7 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
           toolResult({ t: T0 + 6, content: 'SENTINELLE-SORTIE-OUTIL' }),
           assistantTool({ t: T0 + 8, id: 'msg_lu', input: 10, cr: 20_000, uses: [['lu1', 'Read', { file_path: '/home/sentinelle-fichier/lu.png' }]] }),
           toolResults({ t: T0 + 9, results: [['lu1', [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: `${png(10, 10)}SENTINELLEAA` } }]]] }),
+          assistantTool({ t: T0 + 9, id: 'msg_ho', input: 10, cr: 20_000, uses: [['ho1', 'Skill', { skill: 'SENTINELLE-handoff' }], ['ho2', 'Write', { file_path: '/home/sentinelle-ho/handoff-SENTINELLE.md', content: 'x' }]] }),
           assistant({ t: T0 + 10, input: 10, cr: 20_000, cw: 500, model: 'sentinelle modèle avec espaces' }),
           JSON.stringify({ type: 'sentinelle-type avec espaces' }),
           compact({ t: T0 + 20, pre: 20_510, post: 3_000 }),
@@ -45,4 +46,6 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
   // Les sorties sont bien relevées (le nom d'outil est stocké) : sans cela, l'absence du chemin et du base64 ne prouverait rien.
   const turns = readFileSync(path.join(store, files.find((x) => x.startsWith('turns-'))), 'utf8');
   assert.ok(turns.includes('"Read"'), 'la sortie Read n’a pas été relevée');
+  // Le début du handoff est bien relevé : sans cela, l'absence du nom de skill et du nom de fichier ne prouverait rien.
+  assert.ok(turns.includes('"handoff"'), 'le handoff n’a pas été relevé');
 });
