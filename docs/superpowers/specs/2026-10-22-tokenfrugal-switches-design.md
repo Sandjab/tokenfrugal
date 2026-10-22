@@ -25,7 +25,7 @@ net.
 | Produit | Une comparaison mesurée des modes de bascule et une phrase de réponse. Le what-if n'est pas modifié. |
 | Fenêtre après une bascule | Les 10 premiers tours principaux. |
 | Signal de handoff | Liste fixe de mots : `handoff`, `handover`, `passation`. |
-| Liaison d'un `/clear` à sa session précédente | Au calcul, pas au relevé : même projet, au plus 30 min d'écart. |
+| Liaison d'un `/clear` à sa session précédente | Au calcul, pas au relevé : même projet, au plus 12 h entre son dernier tour et la commande `/clear`. |
 
 ## 3. Relevé (`src/read/session.js`)
 
@@ -52,7 +52,8 @@ Fichier principal seulement. Les mots sont cherchés sans casse : `/handoff|hand
 ### 3.3 Format
 
 `Session` gagne `handoff: { at: n }`, `n` étant l'indice du tour de début dans les colonnes triées. Une
-session sans signal n'a pas ce champ. `ANALYZER_VERSION` passe de 4 à 5 ; `SCHEMA` reste 1. Une
+session sans signal n'a pas ce champ. Une session ouverte par `/clear` gagne aussi `clearAt` : l'heure (en
+secondes) de la ligne qui porte la commande `/clear`. `ANALYZER_VERSION` passe de 4 à 5 ; `SCHEMA` reste 1. Une
 session lue avant la version 5 (`analyzer < 5`) a un handoff **inconnu**, pas absent.
 
 ## 4. Modèle (`src/model/switches.js`, module pur)
@@ -70,8 +71,13 @@ session lue avant la version 5 (`analyzer < 5`) a un handoff **inconnu**, pas ab
   d'heure ≥ celle de l'événement.
 - **`/clear`.** Chaque session B avec `clearStart` qui a au moins un tour principal. Session précédente
   A : parmi les autres sessions de même `project.id` non nul, celle dont le dernier tour principal est
-  à l'heure la plus grande ≤ l'heure du premier tour principal de B, si l'écart est d'au plus 30 min.
-  Une session A ne précède qu'une seule B, la première par heure de premier tour : une seconde B qui
+  à l'heure la plus grande ≤ `clearAt` de B (à défaut, l'heure de son premier tour principal), si l'écart
+  est d'au plus 12 h. `/clear` se tape dans la session précédente ; la fenêtre ne protège que d'une
+  précédente absente des journaux. (Révisé le 22 oct. 2026 au contrôle réel : relier sur le premier tour
+  avec 30 min manquait les `/clear` tapés aussitôt mais suivis d'une pause, et quelques pauses entre le
+  handoff et le `/clear` ; à 12 h sur l'heure du `/clear`, tous les handoffs suivis d'un `/clear` sont
+  reliés.)
+  Une session A ne précède qu'une seule B, la première par heure de liaison : une seconde B qui
   la trouverait aussi est traitée comme sans A (le coût d'un handoff ne compte qu'une fois).
   - A a `handoff` : mode `handoff`, `cost` = somme du coût complet (entrée, sortie, cache) des tours
     principaux de A, de `handoff.at` au dernier.
@@ -141,11 +147,11 @@ prouverait rien).
 
 Chaque test dit pourquoi le comportement compte.
 
-- **Lecteur** : les trois signaux ; le dernier skill ou la dernière commande l'emporte sur une écriture
+- **Lecteur** : `clearAt` ; les trois signaux ; le dernier skill ou la dernière commande l'emporte sur une écriture
   antérieure et sur un signal antérieur ; une commande pointe vers le tour suivant ; nom hors liste
   ignoré ; chemin dont seul un dossier contient le mot ignoré ; sous-agents ignorés ; signal sans tour
   après lui ignoré.
-- **`switches`** : chaque mode sur des sessions calculées à la main ; liaison à 29 min oui, 31 min non,
+- **`switches`** : chaque mode sur des sessions calculées à la main ; liaison à 11 h 59 oui, 12 h 01 non, sur `clearAt` et non sur le premier tour,
   autre projet non, projet `null` non ; la plus proche des sessions précédentes ; une A pour une seule B
   (handoff compté une fois) ; une B d'un seul tour ne se prend pas pour sa propre A ; fenêtre arrêtée au
   compactage ; fenêtre incomplète hors des moyennes à 10 tours ; `analyzer < 5` → `unknown` ; période ;
