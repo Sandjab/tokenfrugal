@@ -194,3 +194,49 @@ test('relectures : une autre plage du même fichier est une lecture neuve (pagin
   ]);
   assert.deepEqual(s.tr.file, [0, 1, 1, 1]);
 });
+
+const cmd = (t, name) => user({ t, text: `<command-name>/${name}</command-name>\n<command-message>${name}</command-message>` });
+
+test('handoff : sans skill ni commande, la dernière écriture d’un fichier handoff marque le début', () => {
+  const s = read([
+    assistant({ t: T0, id: 'm0', input: 10, cw: 5_000 }),
+    assistantTool({ t: T0 + 1, id: 'm1', input: 10, cr: 5_000, uses: [['w1', 'Write', { file_path: '/p/HANDOFF.md', content: 'x' }]] }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+    assistantTool({ t: T0 + 3, id: 'm3', input: 10, cr: 5_000, uses: [['w2', 'Edit', { file_path: '/p/docs/passation-oct.md' }]] }),
+    assistant({ t: T0 + 4, id: 'm4', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.handoff, { at: 3 });
+});
+
+test('handoff : le dernier skill ou la dernière commande l’emporte, même sur une écriture postérieure ; une commande désigne le tour suivant', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm0', input: 10, cw: 5_000, uses: [['k1', 'Skill', { skill: 'anthropic-skills:handoff' }]] }),
+    assistant({ t: T0 + 1, id: 'm1', input: 10, cr: 5_000 }),
+    cmd(T0 + 2, 'handoff'),
+    assistant({ t: T0 + 3, id: 'm2', input: 10, cr: 5_000 }),
+    assistantTool({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000, uses: [['w1', 'Write', { file_path: '/p/.claude/handoff.md', content: 'x' }]] }),
+    assistant({ t: T0 + 5, id: 'm4', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.handoff, { at: 2 });   // pas 0 (skill antérieur), pas 3 (écriture : le skill la précède)
+});
+
+test('handoff : dossier seul, autre skill, sous-agent : aucun signal (sinon tout travail sur un dossier « handoff » compterait)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm0', input: 10, cw: 5_000, uses: [['w1', 'Write', { file_path: '/p/handoff/notes.md', content: 'x' }], ['k1', 'Skill', { skill: 'commit' }]] }),
+    assistant({ t: T0 + 1, id: 'm1', input: 10, cr: 5_000 }),
+  ], [[
+    assistantTool({ t: T0 + 2, id: 'a1', input: 10, cw: 1_000, uses: [['w2', 'Write', { file_path: '/p/handoff.md', content: 'x' }]] }),
+  ]]);
+  assert.equal(s.handoff, undefined);
+});
+
+test('handoff : commande en fin de fichier sans tour principal après elle → ignorée, repli sur l’écriture antérieure', () => {
+  const s = read([
+    assistant({ t: T0, id: 'm0', input: 10, cw: 5_000 }),
+    assistantTool({ t: T0 + 1, id: 'm1', input: 10, cr: 5_000, uses: [['w1', 'Write', { file_path: '/p/handoff.md', content: 'x' }]] }),
+    cmd(T0 + 2, 'handoff'),
+  ], [[
+    assistant({ t: T0 + 3, id: 'a1', input: 10, cw: 1_000 }),
+  ]]);
+  assert.deepEqual(s.handoff, { at: 1 });
+});

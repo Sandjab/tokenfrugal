@@ -4,9 +4,10 @@
 // Version 3 : nom du projet (dossier du cwd), spec projets § 3. Chaque changement de version fait relire
 // une fois les sessions dont les journaux existent encore.
 // Version 4 : sorties d'outils (outil, tokens estimés, image, fichier relu), spec sorties d'outils § 3.
+// Version 5 : début du handoff (spec bascules § 3).
 import { imageSize, imageTier, imageTokens, isClaude47Plus } from './image.js';
 
-export const ANALYZER_VERSION = 4;
+export const ANALYZER_VERSION = 5;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
@@ -20,6 +21,9 @@ const UNUSED_TYPES = new Set([
 const MODEL_RE = /^[\w.:@\-[\]]{1,80}$/;
 const TYPE_RE = /^[a-z0-9_-]{1,40}$/i;
 const CLEAR_RE = /<command-name>\/clear<\/command-name>/;
+// Commande slash ; signal de handoff (spec bascules § 3.1) : mots cherchés sans casse, aucun nom n'est gardé.
+const COMMAND_RE = /<command-name>\/([^<]*)<\/command-name>/g;
+const HANDOFF_RE = /handoff|handover|passation/i;
 const FIELDS = ['input', 'output', 'cr', 'cw', 'cw1h'];
 // Nom de projet : même exigence de format que les noms de modèle, mais un dossier peut contenir des
 // espaces ou de la ponctuation ; seuls les séparateurs et les caractères de contrôle sont exclus.
@@ -63,6 +67,10 @@ export class SessionReader {
     this.toolFiles = new Map();   // id d'un Read → numéro de plage lue
     this.files = new Map();       // plage lue (chemin, offset, limit, pages) → numéro, jamais stockée
     this.outputs = [];            // { next, tool, file, chars } ou { next, tool, file, size }
+    // Signaux de handoff du fichier principal (spec bascules § 3.2) : un tour (objet), ou pour une commande
+    // l'indice du prochain tour lu ; le dernier signal de chaque sorte l'emporte.
+    this.handoffCmd = null;      // skill ou commande
+    this.handoffWrite = null;    // écriture d'un fichier handoff
   }
 
   beginFile(kind) {
@@ -93,10 +101,10 @@ export class SessionReader {
     if (this.kind !== 'main') return;
     const c = o.message && o.message.content;
     if (Array.isArray(c)) for (const b of c) if (b && b.type === 'tool_result') this.#toolResult(b);
-    if (this.sawMainTurn || this.clearStart) return;
     const text = typeof c === 'string' ? c
       : Array.isArray(c) ? c.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n') : '';
-    if (CLEAR_RE.test(text)) this.clearStart = true;
+    for (const m of text.matchAll(COMMAND_RE)) if (HANDOFF_RE.test(m[1])) this.handoffCmd = this.turns.length;
+    if (!this.sawMainTurn && !this.clearStart && CLEAR_RE.test(text)) this.clearStart = true;
   }
 
   // Sortie rattachée au prochain tour lu (next), pas à l'heure : le tour qui l'a demandée peut porter la
@@ -124,6 +132,17 @@ export class SessionReader {
       const key = JSON.stringify([fp, b.input.offset ?? null, b.input.limit ?? null, b.input.pages ?? null]);
       if (!this.files.has(key)) this.files.set(key, this.files.size);
       this.toolFiles.set(b.id, this.files.get(key));
+    }
+  }
+
+  // Skill handoff, ou écriture d'un fichier dont le nom (pas le dossier) contient un des mots : le signal porte
+  // sur le tour qui contient le tool_use.
+  #handoffUses(content, turn) {
+    for (const b of content) {
+      if (!b || b.type !== 'tool_use' || !b.input) continue;
+      if (b.name === 'Skill' && typeof b.input.skill === 'string' && HANDOFF_RE.test(b.input.skill)) this.handoffCmd = turn;
+      if ((b.name === 'Write' || b.name === 'Edit') && typeof b.input.file_path === 'string'
+        && HANDOFF_RE.test(b.input.file_path.split(/[\\/]/).pop())) this.handoffWrite = turn;
     }
   }
 
@@ -162,6 +181,7 @@ export class SessionReader {
       if (key) this.byKey.set(key, turn);
     }
     for (const k of FIELDS) if (usage[k] > turn[k]) turn[k] = usage[k];
+    if (this.kind === 'main' && Array.isArray(m.content)) this.#handoffUses(m.content, turn);
   }
 
   // Session en colonnes, tours triés par heure (tri stable : l'ordre de lecture départage).
@@ -195,6 +215,11 @@ export class SessionReader {
       tr.at.push(order.get(turn)); tr.tool.push(tIdx.get(o.tool)); tr.tok.push(tok);
       tr.img.push(o.chars === undefined ? 1 : 0); tr.file.push(o.file);
     }
+    // Début du handoff : dernier skill ou commande, à défaut dernière écriture ; un signal qui ne désigne pas
+    // un tour principal est ignoré (spec bascules § 3.2).
+    const mainTurn = (x) => { const u = typeof x === 'number' ? this.turns[x] : x; return u && !u.sub ? u : null; };
+    const h = mainTurn(this.handoffCmd) ?? mainTurn(this.handoffWrite);
+    if (h) s.handoff = { at: order.get(h) };
     if (tr.at.length) { s.tools = tools; s.tr = tr; }
     return s;
   }
