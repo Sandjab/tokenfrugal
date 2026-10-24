@@ -7,9 +7,10 @@
 // Version 5 : début du handoff (spec bascules § 3).
 // Version 6 : textes de skill (sorties Skill avec nom de skill), spec skills § 3.
 // Version 7 : session lancée dans le dossier personnel → projet « ~ » (le login ne sort pas du lecteur).
+// Version 8 : tours perdus (tous les appels d'outil du tour en échec), spec tours perdus § 3.
 import { imageSize, imageTier, imageTokens, isClaude47Plus } from './image.js';
 
-export const ANALYZER_VERSION = 7;
+export const ANALYZER_VERSION = 8;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
@@ -61,6 +62,29 @@ export function skillNameOf(name) {
   return SKILL_RE.test(name) ? name : 'other';
 }
 
+// Cause d'un échec d'outil (spec tours perdus § 3.3) : début du message, préfixe <tool_use_error> retiré ; la première
+// règle qui s'applique l'emporte. Seul le code sort du lecteur, jamais le message.
+const CAUSE_RULES = [
+  ['refused', /^The user doesn't want to proceed/],
+  ['cancelled', /^Cancelled/],
+  ['permission', /^(Permission for this action was denied|Permission to use .* has been denied|Permission denied by user|Blocked|File is in a directory that is denied|Claude requested permissions to)|File access denied/],
+  ['not-read', /^File has not been read yet/],
+  ['stale', /^File has been modified since read/],
+  ['replace-miss', /^(String to replace not found|Found \d+ matches of the string to replace)/],
+  ['not-found', /^(File does not exist|EISDIR)/],
+  ['too-big', /exceeds maximum allowed tokens/],
+  ['input', /^(InputValidationError|Missing required parameter|Output does not match required schema)/],
+  ['hook', /^\w+:[\w.-]+ hook error/],
+  ['exit', /^Exit code \d+/],
+];
+export function errorCause(content) {
+  const text = typeof content === 'string' ? content
+    : Array.isArray(content) ? content.map((p) => (p && typeof p.text === 'string' ? p.text : '')).join('') : '';
+  const t = text.replace(/^<tool_use_error>/, '');
+  for (const [code, re] of CAUSE_RULES) if (re.test(t)) return code;
+  return 'other';
+}
+
 // Tokens d'un texte : caractères par token calibrés sur des journaux réels (sorties de plus de 1 000 tokens,
 // 21 oct. 2026) : 2,2 dès Claude 4.7 (nouveau tokenizer), 2,8 avant. En dixièmes, pour un calcul exact.
 const textTokens = (chars, model) => Math.ceil((chars * 10) / (isClaude47Plus(model) ? 22 : 28));
@@ -86,6 +110,12 @@ export class SessionReader {
     // Textes de skill (spec skills § 3.1) : id d'un tool_use Skill → nom demandé ; commande de la dernière ligne user.
     this.skillUses = new Map();
     this.lastCommand = null;
+    // Tours perdus (spec tours perdus § 3), fichier principal et sous-agents : id de tool_use → tour ; id → résultat
+    // { cause (null : succès), seq (ordre de lecture) } ; numéro du fichier lu (une série ne passe pas d'un fichier à l'autre).
+    this.useTurn = new Map();
+    this.useResult = new Map();
+    this.resultSeq = 0;
+    this.fileNo = -1;
     // Signaux de handoff du fichier principal (spec bascules § 3.2) : un tour (objet), ou pour une commande
     // l'indice du prochain tour lu ; le dernier signal de chaque sorte l'emporte.
     this.handoffCmd = null;      // skill ou commande
@@ -95,6 +125,7 @@ export class SessionReader {
   beginFile(kind) {
     this.kind = kind;
     this.byKey = new Map();   // la déduplication se fait par fichier
+    this.fileNo++;
   }
 
   #ignore(k) { this.ignored[k] = (this.ignored[k] || 0) + 1; }
@@ -118,8 +149,14 @@ export class SessionReader {
 
   // /clear ouvre un nouveau fichier ; la commande précède le premier tour (brief, formats observés).
   #user(o, ts) {
-    if (this.kind !== 'main') return;
     const c = o.message && o.message.content;
+    // Résultat de chaque appel connu, dans tous les fichiers (spec tours perdus § 3.1).
+    if (Array.isArray(c)) for (const b of c) {
+      if (b && b.type === 'tool_result' && this.useTurn.has(b.tool_use_id)) {
+        this.useResult.set(b.tool_use_id, { cause: b.is_error === true ? errorCause(b.content) : null, seq: this.resultSeq++ });
+      }
+    }
+    if (this.kind !== 'main') return;
     if (Array.isArray(c)) for (const b of c) if (b && b.type === 'tool_result') this.#toolResult(b);
     const text = typeof c === 'string' ? c
       : Array.isArray(c) ? c.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n') : '';
@@ -221,11 +258,15 @@ export class SessionReader {
     let turn = key ? this.byKey.get(key) : null;
     if (!turn) {
       const model = typeof m.model === 'string' && MODEL_RE.test(m.model) ? m.model : 'unknown';
-      turn = { t: Math.floor(ts / 1000), model, input: 0, output: 0, cr: 0, cw: 0, cw1h: 0, sub: this.kind === 'sub' ? 1 : 0 };
+      turn = { t: Math.floor(ts / 1000), model, input: 0, output: 0, cr: 0, cw: 0, cw1h: 0, sub: this.kind === 'sub' ? 1 : 0, file: this.fileNo };
       this.turns.push(turn);
       if (key) this.byKey.set(key, turn);
     }
     for (const k of FIELDS) if (usage[k] > turn[k]) turn[k] = usage[k];
+    // Appels du tour, sur toutes ses lignes (spec tours perdus § 3.1).
+    if (Array.isArray(m.content)) for (const b of m.content) {
+      if (b && b.type === 'tool_use' && typeof b.id === 'string') { this.useTurn.set(b.id, turn); (turn.uses ??= new Set()).add(b.id); }
+    }
     if (this.kind === 'main' && Array.isArray(m.content)) this.#handoffUses(m.content, turn);
   }
 
@@ -269,6 +310,19 @@ export class SessionReader {
     const mainTurn = (x) => { const u = typeof x === 'number' ? this.turns[x] : x; return u && !u.sub ? u : null; };
     const h = mainTurn(this.handoffCmd) ?? mainTurn(this.handoffWrite);
     if (h) s.handoff = { at: order.get(h) };
+    // Tours perdus (spec tours perdus § 3.2 à 3.4), dans l'ordre de lecture, fichier par fichier.
+    const lost = { at: [], cause: [], series: [] };
+    let series = -1, lastFile = null, lastLost = false;
+    for (const turn of this.turns) {
+      if (turn.file !== lastFile) { lastFile = turn.file; lastLost = false; }
+      const res = turn.uses ? [...turn.uses].map((id) => this.useResult.get(id)) : [];
+      if (!res.length || !res.every((r) => r && r.cause !== null)) { lastLost = false; continue; }
+      const first = res.filter((r) => r.cause !== 'cancelled').sort((a, b) => a.seq - b.seq)[0];
+      if (!lastLost) series++;
+      lastLost = true;
+      lost.at.push(order.get(turn)); lost.cause.push(first ? first.cause : 'cancelled'); lost.series.push(series);
+    }
+    if (lost.at.length) s.lost = lost;
     if (tr.at.length) { s.tools = tools; s.tr = tr; if (skills.length) s.skills = skills; }
     return s;
   }

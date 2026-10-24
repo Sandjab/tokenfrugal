@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionReader, projectNameOf, toolNameOf, skillNameOf, ANALYZER_VERSION } from '../src/read/session.js';
+import { SessionReader, projectNameOf, toolNameOf, skillNameOf, errorCause, ANALYZER_VERSION } from '../src/read/session.js';
 import { T0, iso, assistant, user, compact, clearLines, assistantTool, toolResults, skillBody, invokedSkills } from './helpers/logs.js';
 import { png } from './helpers/images.js';
 
@@ -280,7 +280,7 @@ test('skills : les trois façons de charger un texte de skill donnent une sortie
     invokedSkills({ t: T0 + 5, skills: [['superpowers:brainstorming', 280]] }),
     assistant({ t: T0 + 6, id: 'm4', input: 10, cw: 1_100 }),
   ]);
-  assert.equal(ANALYZER_VERSION, 7);
+  assert.equal(ANALYZER_VERSION, 8);
   assert.deepEqual(s.tools, ['Skill']);
   assert.deepEqual(s.skills, ['superpowers:brainstorming', 'handoff']);
   // « Launching skill: … » (42 caractères) reste une sortie Skill sans skill ; le texte rechargé après le compactage
@@ -355,4 +355,95 @@ test('noms de skill : format strict (aucun texte libre stocké) ; deux-points de
   assert.equal(skillNameOf('x'.repeat(81)), 'other');
   assert.equal(skillNameOf(''), '?');
   assert.equal(skillNameOf(undefined), '?');
+});
+
+test('cause d’un échec : début du message, préfixe <tool_use_error> retiré ; liste fermée (aucun texte gardé)', () => {
+  const cases = [
+    ["The user doesn't want to proceed with this tool use.", 'refused'],
+    ['<tool_use_error>Cancelled: parallel tool call Bash(ls) errored</tool_use_error>', 'cancelled'],
+    ['Permission for this action was denied by the Claude Code auto mode classifier.', 'permission'],
+    ['Permission to use Bash with command rm -rf x has been denied.', 'permission'],
+    ['Permission denied by user', 'permission'],
+    ['<tool_use_error>Blocked: sleep 30 followed by: gh run list</tool_use_error>', 'permission'],
+    ['<tool_use_error>File is in a directory that is denied by your permission settings.</tool_use_error>', 'permission'],
+    ['Claude requested permissions to read from /x, but you have not granted it yet.', 'permission'],
+    ['### Error\nError: File access denied: /x is outside allowed roots', 'permission'],
+    ['<tool_use_error>File has not been read yet. Read it first before writing to it.</tool_use_error>', 'not-read'],
+    ['<tool_use_error>File has been modified since read, either by the user or by a linter.</tool_use_error>', 'stale'],
+    ['<tool_use_error>String to replace not found in file.</tool_use_error>', 'replace-miss'],
+    ['<tool_use_error>Found 2 matches of the string to replace, but replace_all is false.</tool_use_error>', 'replace-miss'],
+    ['File does not exist. Note: your current working directory is /x.', 'not-found'],
+    ["EISDIR: illegal operation on a directory, read '/x'", 'not-found'],
+    ['File content (40288 tokens) exceeds maximum allowed tokens (25000).', 'too-big'],
+    ['<tool_use_error>InputValidationError: SendUserFile was called with bad input</tool_use_error>', 'input'],
+    ['<tool_use_error>Missing required parameter: path</tool_use_error>', 'input'],
+    ['Output does not match required schema: root: must have required property', 'input'],
+    ['PreToolUse:Write hook error: [python3 hook.py]: blocked', 'hook'],
+    ['Exit code 1\nnpm ERR!', 'exit'],
+    ['claude-opus-4-7 is temporarily unavailable, so auto mode cannot decide', 'other'],
+    [[{ type: 'text', text: 'Exit code 2' }], 'exit'],
+    [undefined, 'other'],
+  ];
+  for (const [content, code] of cases) assert.equal(errorCause(content), code, String(content));
+});
+
+test('tours perdus : tous les appels du tour en échec ; tour mixte, appel sans résultat : pas perdus (sinon une réussite partielle compterait)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['e1', 'Bash'], ['e2', 'Read']] }),
+    toolResults({ t: T0 + 1, results: [['e1', 'Exit code 1', true], ['e2', 'File does not exist.', true]] }),
+    assistantTool({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, uses: [['x1', 'Bash'], ['x2', 'Bash']] }),
+    toolResults({ t: T0 + 3, results: [['x1', 'ok'], ['x2', 'Exit code 1', true]] }),
+    assistantTool({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000, uses: [['n1', 'Bash'], ['n2', 'Bash']] }),
+    toolResults({ t: T0 + 5, results: [['n1', 'Exit code 1', true]] }),
+    assistant({ t: T0 + 6, id: 'm4', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.lost, { at: [0], cause: ['exit'], series: [0] });
+});
+
+test('cause d’un tour : un « Cancelled » lu en premier cède à la vraie erreur ; seules des annulations → cancelled', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['a1', 'Bash'], ['a2', 'Edit']] }),
+    toolResults({ t: T0 + 1, results: [['a1', '<tool_use_error>Cancelled: parallel tool call</tool_use_error>', true], ['a2', '<tool_use_error>String to replace not found in file.</tool_use_error>', true]] }),
+    assistantTool({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, uses: [['c1', 'Bash']] }),
+    toolResults({ t: T0 + 3, results: [['c1', '<tool_use_error>Cancelled: parallel tool call</tool_use_error>', true]] }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.lost.cause, ['replace-miss', 'cancelled']);
+});
+
+test('séries : tours perdus consécutifs du même fichier ; rompues par un tour réussi, un tour de texte, un changement de fichier', () => {
+  const fail = (t, id, u) => [assistantTool({ t, id, input: 10, cw: 1_000, uses: [[u, 'Bash']] }), toolResults({ t: t + 1, results: [[u, 'Exit code 1', true]] })];
+  const ok = (t, id, u) => [assistantTool({ t, id, input: 10, cw: 1_000, uses: [[u, 'Bash']] }), toolResults({ t: t + 1, results: [[u, 'ok']] })];
+  const s = read([
+    ...fail(T0, 'm1', 'u1'), ...fail(T0 + 10, 'm2', 'u2'),       // série 0
+    ...ok(T0 + 20, 'm3', 'u3'),
+    ...fail(T0 + 30, 'm4', 'u4'),                                // série 1
+    assistant({ t: T0 + 40, id: 'm5', input: 10, cr: 1_000 }),   // tour de texte
+    ...fail(T0 + 50, 'm6', 'u6'),                                // série 2
+  ], [[...fail(T0 + 55, 'a1', 'v1'), ...fail(T0 + 65, 'a2', 'v2')]]);   // sous-agent : série 3, compté
+  assert.deepEqual(s.lost.at, [0, 1, 3, 5, 6, 7]);
+  assert.deepEqual(s.lost.series, [0, 0, 1, 2, 3, 3]);
+  assert.deepEqual(s.lost.at.map((i) => s.sub[i]), [0, 0, 0, 0, 1, 1]);
+});
+
+test('tour écrit sur deux lignes : ses appels des deux lignes comptent ensemble (un succès sur la 2e ligne le sauve)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', req: 'r1', input: 10, cw: 5_000, uses: [['d1', 'Bash']] }),
+    assistantTool({ t: T0, id: 'm1', req: 'r1', input: 10, cw: 5_000, output: 50, uses: [['d2', 'Read']] }),
+    toolResults({ t: T0 + 1, results: [['d1', 'Exit code 1', true], ['d2', 'contenu']] }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+  ]);
+  assert.equal(s.lost, undefined);
+});
+
+test('tool_use d’une ligne sans usage (aucun tour) puis échec : ignoré, aucun tour perdu inventé', () => {
+  const noUsage = JSON.stringify({ type: 'assistant', timestamp: iso(T0), requestId: 'rx',
+    message: { id: 'mx', model: 'claude-opus-4-6', role: 'assistant', content: [{ type: 'tool_use', id: 'z1', name: 'Bash', input: {} }] } });
+  const s = read([
+    assistant({ t: T0, id: 'm1', input: 10, cw: 5_000 }),
+    noUsage,
+    toolResults({ t: T0 + 1, results: [['z1', 'Exit code 1', true]] }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+  ]);
+  assert.equal(s.lost, undefined);
 });

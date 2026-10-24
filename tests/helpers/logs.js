@@ -28,10 +28,10 @@ export function assistantTool({ uses, ...turn }) {
   o.message.content = uses.map(([id, name, input = {}]) => ({ type: 'tool_use', id, name, input }));
   return JSON.stringify(o);
 }
-// Sorties d'outils sur une ligne user : results = [[tool_use_id, contenu (chaîne ou blocs)]].
+// Sorties d'outils sur une ligne user : results = [[tool_use_id, contenu (chaîne ou blocs), en échec (is_error)]].
 export const toolResults = ({ t, results }) => JSON.stringify({
   type: 'user', timestamp: iso(t),
-  message: { role: 'user', content: results.map(([id, content]) => ({ type: 'tool_result', tool_use_id: id, content })) },
+  message: { role: 'user', content: results.map(([id, content, isError]) => ({ type: 'tool_result', tool_use_id: id, content, ...(isError ? { is_error: true } : {}) })) },
 });
 // Texte d'un skill chargé (format relevé le 24 oct. 2026) : ligne user isMeta qui commence par SKILL_HEAD ; src =
 // sourceToolUseID quand le modèle l'a lancé par l'outil Skill, absent quand une commande l'a lancé.
