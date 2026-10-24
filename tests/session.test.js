@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionReader, projectNameOf, toolNameOf } from '../src/read/session.js';
-import { T0, assistant, user, compact, clearLines, assistantTool, toolResults } from './helpers/logs.js';
+import { SessionReader, projectNameOf, toolNameOf, skillNameOf, ANALYZER_VERSION } from '../src/read/session.js';
+import { T0, iso, assistant, user, compact, clearLines, assistantTool, toolResults, skillBody, invokedSkills } from './helpers/logs.js';
 import { png } from './helpers/images.js';
 
 function read(main, subs = []) {
@@ -256,4 +256,94 @@ test('handoff : une écriture ne compte que pour un document .md ou .txt (sinon 
   assert.equal(at('/p/src/passation.service.ts'), undefined);
   assert.deepEqual(at('/p/handoff.txt'), { at: 0 });
   assert.deepEqual(at('/p/HANDOFF.MD'), { at: 0 });
+});
+
+test('skills : les trois façons de charger un texte de skill donnent une sortie Skill à son nom (sinon la ligne Skill ne compte que « Launching skill »)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['k1', 'Skill', { skill: 'superpowers:brainstorming' }]] }),
+    toolResults({ t: T0 + 1, results: [['k1', 'Launching skill: superpowers:brainstorming']] }),
+    skillBody({ t: T0 + 1, src: 'k1', chars: 2_800 }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, cw: 1_000 }),
+    cmd(T0 + 3, 'handoff'),
+    skillBody({ t: T0 + 3, chars: 5_600 }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 6_000, cw: 2_000 }),
+    compact({ t: T0 + 5, pre: 8_010, post: 1_000 }),
+    invokedSkills({ t: T0 + 5, skills: [['superpowers:brainstorming', 280]] }),
+    assistant({ t: T0 + 6, id: 'm4', input: 10, cw: 1_100 }),
+  ]);
+  assert.equal(ANALYZER_VERSION, 6);
+  assert.deepEqual(s.tools, ['Skill']);
+  assert.deepEqual(s.skills, ['superpowers:brainstorming', 'handoff']);
+  // « Launching skill: … » (42 caractères) reste une sortie Skill sans skill ; le texte rechargé après le compactage
+  // est repayé par le tour qui suit (claude-opus-4-6 : 2,8 caractères par token).
+  assert.deepEqual(s.tr.at, [1, 1, 2, 3]);
+  assert.deepEqual(s.tr.tok, [15, 1_000, 2_000, 100]);
+  assert.deepEqual(s.tr.skill, [-1, 0, 1, 0]);
+  assert.deepEqual(s.tr.file, [-1, -1, -1, -1]);
+  assert.deepEqual(s.tr.img, [0, 0, 0, 0]);
+});
+
+test('skills : nom introuvable → ?, hors format → other ; une ligne isMeta sans le préfixe n’est pas un skill', () => {
+  const s = read([
+    assistant({ t: T0, id: 'm1', input: 10, cw: 5_000 }),
+    skillBody({ t: T0 + 1, src: 'inconnu' }),                     // tool_use jamais vu
+    user({ t: T0 + 1, text: 'texte libre' }),
+    skillBody({ t: T0 + 1 }),                                      // aucune commande juste avant
+    assistantTool({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000, uses: [['k1', 'Skill', { skill: 'a/b c' }]] }),
+    skillBody({ t: T0 + 3, src: 'k1' }),
+    skillBody({ t: T0 + 3, text: 'Caveat: rien à voir avec un skill' }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.skills, ['?', 'other']);
+  assert.deepEqual(s.tr.skill, [0, 0, 1]);
+});
+
+test('skills : commande avec arguments, texte en chaîne simple, même skill chargé deux fois (deux chargements)', () => {
+  const s = read([
+    assistant({ t: T0, id: 'm1', input: 10, cw: 5_000 }),
+    user({ t: T0 + 1, text: '<command-message>handoff</command-message>\n<command-name>/handoff</command-name>\n<command-args>vite</command-args>' }),
+    skillBody({ t: T0 + 1, chars: 280, asString: true }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+    cmd(T0 + 3, 'handoff'),
+    skillBody({ t: T0 + 3, chars: 280 }),
+    assistant({ t: T0 + 4, id: 'm3', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.skills, ['handoff']);
+  assert.deepEqual(s.tr.skill, [0, 0]);
+  assert.deepEqual(s.tr.at, [1, 2]);
+  assert.deepEqual(s.tr.tok, [100, 100]);
+});
+
+test('skills : sous-agent ignoré ; élément d’invoked_skills sans contenu ignoré ; autres attachments ni comptés ni signalés', () => {
+  const s = read([
+    assistant({ t: T0, id: 'm1', input: 10, cw: 5_000 }),
+    JSON.stringify({ type: 'attachment', timestamp: iso(T0 + 1), attachment: { type: 'invoked_skills', skills: [{ name: 'sans-contenu' }, { content: 'x'.repeat(28) }, 'pas-un-objet'] } }),
+    JSON.stringify({ type: 'attachment', timestamp: iso(T0 + 1), attachment: { type: 'skill_listing', content: 'liste' } }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+  ], [[
+    assistantTool({ t: T0 + 3, id: 'a1', input: 10, cw: 1_000, uses: [['k9', 'Skill', { skill: 'dans-sous-agent' }]] }),
+    skillBody({ t: T0 + 3, src: 'k9' }),
+    assistant({ t: T0 + 4, id: 'a2', input: 10, cr: 1_000 }),
+  ]]);
+  assert.deepEqual(s.skills, ['?']);
+  assert.deepEqual(s.tr.tok, [10]);
+  assert.deepEqual(s.ignored, {});
+});
+
+test('sorties d’outils sans skill : tr.skill à −1, pas de liste skills (le stockage ne grossit pas pour rien)', () => {
+  const s = read([
+    assistantTool({ t: T0, id: 'm1', input: 10, cw: 5_000, uses: [['u1', 'Bash']] }),
+    toolResults({ t: T0 + 1, results: [['u1', 'abc']] }),
+    assistant({ t: T0 + 2, id: 'm2', input: 10, cr: 5_000 }),
+  ]);
+  assert.deepEqual(s.tr.skill, [-1]);
+  assert.equal(s.skills, undefined);
+});
+
+test('noms de skill : format strict (aucun texte libre stocké) ; deux-points des plugins admis', () => {
+  assert.equal(skillNameOf('superpowers:brainstorming'), 'superpowers:brainstorming');
+  assert.equal(skillNameOf('a/b'), 'other');
+  assert.equal(skillNameOf('x'.repeat(81)), 'other');
+  assert.equal(skillNameOf(''), '?');
+  assert.equal(skillNameOf(undefined), '?');
 });

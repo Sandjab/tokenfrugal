@@ -5,14 +5,15 @@
 // une fois les sessions dont les journaux existent encore.
 // Version 4 : sorties d'outils (outil, tokens estimés, image, fichier relu), spec sorties d'outils § 3.
 // Version 5 : début du handoff (spec bascules § 3).
+// Version 6 : textes de skill (sorties Skill avec nom de skill), spec skills § 3.
 import { imageSize, imageTier, imageTokens, isClaude47Plus } from './image.js';
 
-export const ANALYZER_VERSION = 5;
+export const ANALYZER_VERSION = 6;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
 const UNUSED_TYPES = new Set([
-  'attachment', 'file-history-snapshot', 'file-history-delta', 'last-prompt', 'permission-mode', 'mode',
+  'file-history-snapshot', 'file-history-delta', 'last-prompt', 'permission-mode', 'mode',
   'custom-title', 'ai-title', 'agent-name', 'atis-latch', 'bridge-session', 'queue-operation',
   'artifact-comment-monitor', 'artifact-autoreact-ledger', 'cost-state', 'frame-link', 'pr-link',
   'api-request', 'api-request-shape', 'api-request-blob', 'continued-in', 'summary',
@@ -48,6 +49,15 @@ export function toolNameOf(name) {
   return TOOL_RE.test(n) ? n : 'other';
 }
 
+// Texte d'un skill chargé : ligne user isMeta qui commence par ce préfixe (spec skills § 3.1).
+const SKILL_PREFIX = 'Base directory for this skill:';
+// Nom de skill : format strict ; les deux-points des skills de plugin (plugin:skill) sont admis.
+const SKILL_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
+export function skillNameOf(name) {
+  if (typeof name !== 'string' || !name) return '?';
+  return SKILL_RE.test(name) ? name : 'other';
+}
+
 // Tokens d'un texte : caractères par token calibrés sur des journaux réels (sorties de plus de 1 000 tokens,
 // 21 oct. 2026) : 2,2 dès Claude 4.7 (nouveau tokenizer), 2,8 avant. En dixièmes, pour un calcul exact.
 const textTokens = (chars, model) => Math.ceil((chars * 10) / (isClaude47Plus(model) ? 22 : 28));
@@ -70,6 +80,9 @@ export class SessionReader {
     this.toolFiles = new Map();   // id d'un Read → numéro de plage lue
     this.files = new Map();       // plage lue (chemin, offset, limit, pages) → numéro, jamais stockée
     this.outputs = [];            // { next, tool, file, chars } ou { next, tool, file, size }
+    // Textes de skill (spec skills § 3.1) : id d'un tool_use Skill → nom demandé ; commande de la dernière ligne user.
+    this.skillUses = new Map();
+    this.lastCommand = null;
     // Signaux de handoff du fichier principal (spec bascules § 3.2) : un tour (objet), ou pour une commande
     // l'indice du prochain tour lu ; le dernier signal de chaque sorte l'emporte.
     this.handoffCmd = null;      // skill ou commande
@@ -94,6 +107,7 @@ export class SessionReader {
       case 'assistant': this.#assistant(o, ts); return;
       case 'user': this.#user(o, ts); return;
       case 'system': if (o.subtype === 'compact_boundary') this.#compact(o, ts); return;
+      case 'attachment': if (o.attachment && o.attachment.type === 'invoked_skills') this.#invokedSkills(o); return;
       default:
         if (!UNUSED_TYPES.has(o.type)) this.#ignore(typeof o.type === 'string' && TYPE_RE.test(o.type) ? o.type : 'other');
     }
@@ -106,10 +120,31 @@ export class SessionReader {
     if (Array.isArray(c)) for (const b of c) if (b && b.type === 'tool_result') this.#toolResult(b);
     const text = typeof c === 'string' ? c
       : Array.isArray(c) ? c.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n') : '';
-    for (const m of text.matchAll(COMMAND_RE)) if (HANDOFF_RE.test(m[1])) this.handoffCmd = this.turns.length;
+    // Texte d'un skill : lancé par le modèle (sourceToolUseID → tool_use Skill) ou par la commande de la ligne user
+    // précédente (spec skills § 3.1).
+    const isSkill = o.isMeta === true && text.startsWith(SKILL_PREFIX);
+    if (isSkill) {
+      const name = typeof o.sourceToolUseID === 'string' ? this.skillUses.get(o.sourceToolUseID) : this.lastCommand;
+      this.outputs.push({ next: this.turns.length, tool: 'Skill', file: -1, chars: text.length, skill: skillNameOf(name) });
+    }
+    let command = null;
+    for (const m of text.matchAll(COMMAND_RE)) {
+      command ??= m[1];
+      if (HANDOFF_RE.test(m[1])) this.handoffCmd = this.turns.length;
+    }
+    this.lastCommand = isSkill ? null : command;
     if (!this.sawMainTurn && !this.clearStart && CLEAR_RE.test(text)) {
       this.clearStart = true;
       if (!Number.isNaN(ts)) this.clearAt = Math.floor(ts / 1000);
+    }
+  }
+
+  // Skills rechargés après un compactage : chaque élément est un texte de skill (spec skills § 3.1, cas 3).
+  #invokedSkills(o) {
+    if (this.kind !== 'main' || !Array.isArray(o.attachment.skills)) return;
+    for (const x of o.attachment.skills) {
+      if (!x || typeof x.content !== 'string') continue;
+      this.outputs.push({ next: this.turns.length, tool: 'Skill', file: -1, chars: x.content.length, skill: skillNameOf(x.name) });
     }
   }
 
@@ -132,6 +167,7 @@ export class SessionReader {
     for (const b of content) {
       if (!b || b.type !== 'tool_use' || typeof b.id !== 'string') continue;
       this.toolNames.set(b.id, toolNameOf(b.name));
+      if (b.name === 'Skill' && b.input) this.skillUses.set(b.id, b.input.skill);
       const fp = b.name === 'Read' && b.input && typeof b.input.file_path === 'string' ? b.input.file_path : '';
       if (!fp) continue;
       // Une autre plage du même fichier est une lecture neuve (pagination), pas une relecture.
@@ -210,7 +246,8 @@ export class SessionReader {
     }
     // Sorties : le tour « next » est un tour principal lu après elles ; sans lui, aucun tour ne la repaie.
     const order = new Map(turns.map((x, i) => [x, i]));
-    const tools = [], tIdx = new Map(), tr = { at: [], tool: [], tok: [], img: [], file: [], unsized: 0 };
+    const tools = [], tIdx = new Map(), tr = { at: [], tool: [], tok: [], img: [], file: [], skill: [], unsized: 0 };
+    const skills = [], kIdx = new Map();
     for (const o of this.outputs) {
       const turn = this.turns[o.next];
       if (!turn || turn.sub) continue;
@@ -219,15 +256,17 @@ export class SessionReader {
       else if (o.size) tok = imageTokens(o.size.w, o.size.h, turn.model);
       else { tok = imageTier(turn.model).cap; tr.unsized++; }
       if (!tIdx.has(o.tool)) { tIdx.set(o.tool, tools.length); tools.push(o.tool); }
+      if (o.skill !== undefined && !kIdx.has(o.skill)) { kIdx.set(o.skill, skills.length); skills.push(o.skill); }
       tr.at.push(order.get(turn)); tr.tool.push(tIdx.get(o.tool)); tr.tok.push(tok);
       tr.img.push(o.chars === undefined ? 1 : 0); tr.file.push(o.file);
+      tr.skill.push(o.skill === undefined ? -1 : kIdx.get(o.skill));
     }
     // Début du handoff : dernier skill ou commande, à défaut dernière écriture ; un signal qui ne désigne pas
     // un tour principal est ignoré (spec bascules § 3.2).
     const mainTurn = (x) => { const u = typeof x === 'number' ? this.turns[x] : x; return u && !u.sub ? u : null; };
     const h = mainTurn(this.handoffCmd) ?? mainTurn(this.handoffWrite);
     if (h) s.handoff = { at: order.get(h) };
-    if (tr.at.length) { s.tools = tools; s.tr = tr; }
+    if (tr.at.length) { s.tools = tools; s.tr = tr; if (skills.length) s.skills = skills; }
     return s;
   }
 }

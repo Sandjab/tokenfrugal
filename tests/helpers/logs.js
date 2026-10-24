@@ -33,6 +33,19 @@ export const toolResults = ({ t, results }) => JSON.stringify({
   type: 'user', timestamp: iso(t),
   message: { role: 'user', content: results.map(([id, content]) => ({ type: 'tool_result', tool_use_id: id, content })) },
 });
+// Texte d'un skill chargé (format relevé le 24 oct. 2026) : ligne user isMeta qui commence par SKILL_HEAD ; src =
+// sourceToolUseID quand le modèle l'a lancé par l'outil Skill, absent quand une commande l'a lancé.
+export const SKILL_HEAD = 'Base directory for this skill: /p/skills/x\n\n';
+const skillText = (chars) => SKILL_HEAD + 'x'.repeat(Math.max(0, chars - SKILL_HEAD.length));
+export const skillBody = ({ t, src, chars = 2_800, text = skillText(chars), asString = false }) => JSON.stringify({
+  type: 'user', isMeta: true, timestamp: iso(t), ...(src ? { sourceToolUseID: src } : {}),
+  message: { role: 'user', content: asString ? text : [{ type: 'text', text }] },
+});
+// Skills rechargés après un compactage : skills = [[nom, nombre de caractères ou contenu]].
+export const invokedSkills = ({ t, skills }) => JSON.stringify({
+  type: 'attachment', timestamp: iso(t),
+  attachment: { type: 'invoked_skills', skills: skills.map(([name, c]) => ({ name, path: `plugin:${name}`, content: typeof c === 'string' ? c : skillText(c) })) },
+});
 export const compact = ({ t, trigger = 'auto', pre, post }) =>
   JSON.stringify({ type: 'system', subtype: 'compact_boundary', timestamp: iso(t), compactMetadata: { trigger, preTokens: pre, postTokens: post, durationMs: 80_000 } });
 export const clearLines = (t) => [
