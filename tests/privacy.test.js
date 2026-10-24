@@ -26,6 +26,8 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
           user({ t: T0 + 12, text: '<command-name>/temoin-commande</command-name>', cwd: '/home/sentinelle-cwd/Projet-Permis' }),
           skillBody({ t: T0 + 12, text: `Base directory for this skill: ${homedir()}/sentinelle-commande\n\nSENTINELLE-CORPS-COMMANDE` }),
           assistant({ t: T0 + 13, id: 'msg_sk2', input: 10, cr: 20_000 }),
+          assistantTool({ t: T0 + 14, id: 'msg_er', input: 10, cr: 20_000, uses: [['er1', 'Bash', { command: `ls ${homedir()}/sentinelle-cmd` }]] }),
+          toolResults({ t: T0 + 15, results: [['er1', `Exit code 2\nls: ${homedir()}/sentinelle-erreur: SENTINELLE-ERREUR`, true]] }),
           compact({ t: T0 + 20, pre: 20_510, post: 3_000 }),
           JSON.stringify({ type: 'attachment', timestamp: iso(T0 + 21), attachment: { type: 'invoked_skills', skills: [{ name: 'temoin-recharge', path: `${homedir()}/sentinelle-recharge`, content: 'SENTINELLE-CORPS-RECHARGE' }] } }),
           assistant({ t: T0 + 22, id: 'msg_sk3', input: 10, cw: 3_000 }),
@@ -58,4 +60,7 @@ test('aucune chaîne-témoin, ni dossier personnel, ni chemin des journaux dans 
   // Les noms de skill sont gardés à dessein (spec skills § 6) : sans eux, l'absence des textes et des chemins ne
   // prouverait rien.
   for (const name of ['temoin-skill', 'temoin-commande', 'temoin-recharge']) assert.ok(turns.includes(`"${name}"`), `le skill ${name} n’a pas été relevé`);
+  // Les tours perdus sont bien relevés (code de cause stocké) : sans cela, l'absence du message et de la commande ne
+  // prouverait rien.
+  assert.ok(turns.includes('"exit"'), 'le tour perdu n’a pas été relevé');
 });
