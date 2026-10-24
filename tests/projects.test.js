@@ -44,3 +44,11 @@ test('weeksIn : sans début, toutes les semaines ; avec, celles à partir de la 
   assert.equal(weeksIn(ws).length, 2);
   assert.equal(weeksIn(ws, { from: weekStart(T + 3 * WEEK) }).length, 1);
 });
+
+test('nom d’un projet : celui de sa session nommée la plus récente (une session purgée garde le nom d’une version antérieure)', () => {
+  const old = inProject(session([{ t: T, in: 10, cw: 1_000 }]), 'hhhh0000', 'jdupont');
+  const recent = inProject(session([{ t: T + 3600, in: 10, cw: 1_000 }]), 'hhhh0000', '~');
+  const unnamed = inProject(session([{ t: T + 7200, in: 10, cw: 1_000 }]), 'hhhh0000');
+  assert.equal(byProject([old, recent, unnamed])[0].name, '~');
+  assert.equal(byProject([unnamed, recent, old])[0].name, '~');
+});

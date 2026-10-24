@@ -10,9 +10,11 @@ export function byProject(sessions, range = {}) {
   const groups = new Map();
   for (const s of sessions) {
     const id = s.project?.id ?? null;
-    if (!groups.has(id)) groups.set(id, { name: undefined, list: [] });
+    if (!groups.has(id)) groups.set(id, { name: undefined, nameT: -Infinity, list: [] });
     const g = groups.get(id);
-    g.name ??= s.project?.name;
+    // Nom de la session nommée la plus récente : une session purgée garde le nom lu par une version antérieure.
+    const last = s.t[s.t.length - 1];
+    if (s.project?.name !== undefined && last >= g.nameT) { g.name = s.project.name; g.nameT = last; }
     g.list.push(s);
   }
   const from = range.from ?? -Infinity, to = range.to ?? Infinity;

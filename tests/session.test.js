@@ -92,6 +92,15 @@ test('projet : un worktree de Claude Code est rattaché à son projet, pas compt
   assert.equal(projectNameOf('/home/x/alpha/.claude/worktrees/feat-1/sous-dossier'), 'alpha');
 });
 
+test('projet : une session lancée dans le dossier personnel s’appelle « ~ » (sinon le login paraît sur la page)', () => {
+  assert.equal(projectNameOf('/Users/jdupont'), '~');
+  assert.equal(projectNameOf('/home/jdupont/'), '~');
+  assert.equal(projectNameOf('C:\\Users\\jdupont'), '~');
+  assert.equal(projectNameOf('/root'), '~');
+  assert.equal(projectNameOf('/Users/jdupont/projet'), 'projet');
+  assert.equal(projectNameOf('/srv/jdupont'), 'jdupont');
+});
+
 test('projet : chemins Windows ; racine, nom trop long ou caractère de contrôle → « ? » (format strict)', () => {
   assert.equal(projectNameOf('C:\\dev\\gamma'), 'gamma');
   assert.equal(projectNameOf('/home/x/gamma/'), 'gamma');
@@ -271,7 +280,7 @@ test('skills : les trois façons de charger un texte de skill donnent une sortie
     invokedSkills({ t: T0 + 5, skills: [['superpowers:brainstorming', 280]] }),
     assistant({ t: T0 + 6, id: 'm4', input: 10, cw: 1_100 }),
   ]);
-  assert.equal(ANALYZER_VERSION, 6);
+  assert.equal(ANALYZER_VERSION, 7);
   assert.deepEqual(s.tools, ['Skill']);
   assert.deepEqual(s.skills, ['superpowers:brainstorming', 'handoff']);
   // « Launching skill: … » (42 caractères) reste une sortie Skill sans skill ; le texte rechargé après le compactage

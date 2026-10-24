@@ -6,9 +6,10 @@
 // Version 4 : sorties d'outils (outil, tokens estimés, image, fichier relu), spec sorties d'outils § 3.
 // Version 5 : début du handoff (spec bascules § 3).
 // Version 6 : textes de skill (sorties Skill avec nom de skill), spec skills § 3.
+// Version 7 : session lancée dans le dossier personnel → projet « ~ » (le login ne sort pas du lecteur).
 import { imageSize, imageTier, imageTokens, isClaude47Plus } from './image.js';
 
-export const ANALYZER_VERSION = 6;
+export const ANALYZER_VERSION = 7;
 
 // Types connus que le relevé n'utilise pas : ignorés sans être comptés (relevé du 19 oct. 2026).
 // Un type absent de cette liste est compté : c'est le signe d'un format qui a changé.
@@ -33,9 +34,11 @@ const FIELDS = ['input', 'output', 'cr', 'cw', 'cw1h'];
 const PROJECT_RE = /^[^\/\\\u0000-\u001f\u007f]{1,80}$/;
 
 // Nom du projet : dernier segment du cwd ; un worktree de Claude Code (<projet>/.claude/worktrees/<x>)
-// est rattaché à <projet>. Seul ce nom sort du lecteur, jamais le chemin (spec projets § 3.1).
+// est rattaché à <projet>. Seul ce nom sort du lecteur, jamais le chemin (spec projets § 3.1). Le dossier
+// personnel lui-même (/Users/x, /home/x, C:\Users\x, /root) s'appelle « ~ » : son nom serait le login.
 export function projectNameOf(cwd) {
   const segs = cwd.split(/[\\/]/).filter(Boolean);
+  if (/^(\/(Users|home)\/[^\\/]+|[A-Za-z]:\\Users\\[^\\/]+|\/root)[\\/]?$/.test(cwd)) return '~';
   const w = segs.findIndex((x, i) => x === '.claude' && segs[i + 1] === 'worktrees');
   const name = w > 0 ? segs[w - 1] : segs.at(-1);
   return name && PROJECT_RE.test(name) ? name : '?';
