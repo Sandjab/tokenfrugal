@@ -3,3 +3,4 @@ private/
 test-results/
 dist/
 .DS_Store
+.claude/
