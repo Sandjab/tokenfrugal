@@ -5,7 +5,9 @@ import { MIN_COMPARE } from '../model/switches.js';
 let lang = 'fr';
 const LOCALES = { fr: 'fr-FR', en: 'en-US' };
 const nf = (d) => new Intl.NumberFormat(LOCALES[lang], { minimumFractionDigits: d, maximumFractionDigits: d });
-const sp = () => (lang === 'fr' ? ' ' : '');   // espace avant k, M et % en français seulement
+// Espace insécable avant k, M, % et $ (en français seulement) : sinon l'unité peut passer seule à la ligne.
+const NBSP = '\u00a0';
+const sp = () => (lang === 'fr' ? NBSP : '');
 
 export function fmtTok(n) {
   if (!Number.isFinite(n)) return '∞';
@@ -15,14 +17,14 @@ export function fmtTok(n) {
   return nf(0).format(n);
 }
 export function fmtCost(c, unit) {
-  if (unit !== 'usd') return `${fmtTok(c.wtok)} ${T.wtokUnit}`;
-  return lang === 'fr' ? `${nf(2).format(c.usd)} $` : `$${nf(2).format(c.usd)}`;
+  if (unit !== 'usd') return `${fmtTok(c.wtok)}${NBSP}${T.wtokUnit}`;
+  return lang === 'fr' ? `${nf(2).format(c.usd)}${NBSP}$` : `$${nf(2).format(c.usd)}`;
 }
 export const fmtPct = (x) => `${x >= 0 ? '+' : ''}${nf(0).format(x * 100)}${sp()}%`;
 // Part : une décimale sous 1 % (sinon chaque petit poste affiche 0 %), « < 0,1 % » quand elle s'arrondirait à 0,0.
 export const fmtShare = (x) => {
   const p = x * 100;
-  if (p > 0 && p < 0.05) return `< ${nf(1).format(0.1)}${sp()}%`;
+  if (p > 0 && p < 0.05) return `<${NBSP}${nf(1).format(0.1)}${sp()}%`;
   return `${nf(p > 0 && p < 0.95 ? 1 : 0).format(p)}${sp()}%`;
 };
 // Graduation d'un axe de graphique. Dans le canvas, l'espace fine insécable (U+202F) des milliers

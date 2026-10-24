@@ -27,15 +27,15 @@ test('aucune session : aucune recommandation', () => {
 
 test('phrase d’action : texte fixe, chiffres calculés', () => {
   const r = { lever: 'pause', params: { pauseSwitchMin: 15 }, perWeek: { usd: 12.5, wtok: 3_000 } };
-  assert.equal(recommendationText(r, 'usd'), 'Basculer avant les pauses de plus de 15 min : −12,50 $ par semaine');
-  assert.equal(recommendationText(r, 'wtok'), 'Basculer avant les pauses de plus de 15 min : −3 k tokens pondérés par semaine');
+  assert.equal(recommendationText(r, 'usd'), 'Basculer avant les pauses de plus de 15 min : −12,50\u00a0$ par semaine');
+  assert.equal(recommendationText(r, 'wtok'), 'Basculer avant les pauses de plus de 15 min : −3\u00a0k\u00a0tokens pondérés par semaine');
 });
 
 test('formats : k, M, infini, $', () => {
-  assert.equal(fmtTok(150_000), '150 k');
-  assert.equal(fmtTok(1_250_000), '1,3 M');
+  assert.equal(fmtTok(150_000), '150\u00a0k');
+  assert.equal(fmtTok(1_250_000), '1,3\u00a0M');
   assert.equal(fmtTok(Infinity), '∞');
-  assert.equal(fmtCost({ usd: 12.5, wtok: 0 }, 'usd'), '12,50 $');
+  assert.equal(fmtCost({ usd: 12.5, wtok: 0 }, 'usd'), '12,50\u00a0$');
 });
 
 test('une session antérieure aux 4 semaines qui précèdent le dernier tour n’influe pas sur les recommandations', () => {

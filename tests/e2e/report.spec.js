@@ -150,7 +150,7 @@ test('« 4 semaines » : exactement 4 semaines ISO dans les tableaux, la derniè
 
 test('tendance : dernière semaine complète comparée à la semaine calendaire d’avant, toutes deux nommées', async ({ page }) => {
   await page.goto(weeksUrl);
-  await expect(page.locator('#summary')).toContainText(/2026-W42 : [+−-]?\d+ % par rapport à 2026-W41/);
+  await expect(page.locator('#summary')).toContainText(/2026-W42 : [+−-]?\d+\u00a0% par rapport à 2026-W41/);
 });
 
 test('la bascule d’unité réutilise les derniers résultats : what-if ni reconstruit ni rejoué', async ({ page }) => {
@@ -188,7 +188,7 @@ test('T du levier pause déduit du TTL du cache mesuré, avec sa note', async ({
   await expect(page.locator('#note-pauseSwitchMin')).toHaveText('15 min : cache de 5 min');
   await page.goto(weeksUrl);  // écritures en cache 1 h
   await expect(page.locator('#v-pauseSwitchMin')).toHaveText('60 min');
-  await expect(page.locator('#note-pauseSwitchMin')).toHaveText(/^60 min : vos écritures en cache sont en TTL 1 h \(100 %\)$/);
+  await expect(page.locator('#note-pauseSwitchMin')).toHaveText(/^60 min : vos écritures en cache sont en TTL 1 h \(100\u00a0%\)$/);
   await page.locator('#sl-pauseSwitchMin').evaluate((el) => { el.value = '30'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.locator('#wi-optimum').click();   // le préréglage revient au T mesuré
   await expect(page.locator('#v-pauseSwitchMin')).toHaveText('60 min');
