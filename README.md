@@ -37,6 +37,7 @@ and writes `~/.tokenfrugal/report.html`. Other commands:
   they would have saved.
 - Cost and key indicators by project, with a selector that narrows the whole report to one project.
 - Tool outputs: carried cost by tool (each output is paid again on every later turn until compaction), file rereads, and two what-if levers: capping text outputs and shrinking screenshots.
+- Skills: carried cost by skill — each loaded skill text (by the model, by a command, or reloaded after compaction) is paid again on every later turn until compaction.
 - Switches: compaction versus handoff then /clear, with each switch's cost, resume size and the next 10 turns, and a one-line answer to which costs less.
 
 Costs are shown in API-equivalent dollars and in weighted tokens (each token weighted by its price
