@@ -105,6 +105,9 @@ test('langue : le sélecteur du rapport agit après l’analyse (et non celui de
   await expect(page.locator('#summary h2')).toHaveText('Summary');
 });
 
+// Attente du signalement d'un fichier modifié après sa sélection (voir le premier test qui l'utilise).
+const UNREADABLE_WAIT = 20_000;
+
 test('fichier modifié après sa sélection : illisible pour le navigateur, signalé, jamais figé vide', async ({ page }) => {
   const dir = writeProjects({ p: { a: { main: sessionLines(T0) }, b: { main: sessionLines(T0 + 3600) } } });
   await page.goto(webUrl);
@@ -112,7 +115,9 @@ test('fichier modifié après sa sélection : illisible pour le navigateur, sign
   // Chromium refuse de lire un fichier dont la taille a changé depuis la sélection.
   appendFileSync(path.join(dir, 'p', 'b.jsonl'), `${assistant({ t: T0 + 3700, input: 10, cr: 35_000, cw: 1_000 })}\n`);
   await page.click('#analyze');
-  await expect(page.locator('#report')).toBeVisible();
+  // Sous Linux (CI), Chromium met parfois plus de 5 s à signaler le fichier illisible (échec du 24 oct. 2026,
+  // passé à la relance) : délai propre à cette attente.
+  await expect(page.locator('#report')).toBeVisible({ timeout: UNREADABLE_WAIT });
   await expect(page.locator('#warnings')).toContainText('1 session illisible');
 });
 
@@ -122,7 +127,7 @@ test('aucun fichier lisible : message sur l’accueil, pas de rapport vide', asy
   await page.setInputFiles('#pick-dir', dir);
   appendFileSync(path.join(dir, 'p', 'a.jsonl'), `${assistant({ t: T0 + 3700, input: 10, cr: 35_000, cw: 1_000 })}\n`);
   await page.click('#analyze');
-  await expect(page.locator('#status')).toContainText('aucun fichier de session');
+  await expect(page.locator('#status')).toContainText('aucun fichier de session', { timeout: UNREADABLE_WAIT });
   await expect(page.locator('#report')).toBeHidden();
 });
 
