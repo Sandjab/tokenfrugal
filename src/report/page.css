@@ -28,7 +28,11 @@ th[scope=row] { font-weight: normal; color: var(--muted); }
 .scroll { overflow-x: auto; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
-.bar { display: inline-block; height: 8px; width: var(--w); max-width: 60%; background: var(--accent); border-radius: 2px; vertical-align: middle; }
+/* Barre dans une piste de largeur fixe : en % de la cellule, dont la largeur dépend du contenu, elle s'écrasait.
+   La piste et son pourcentage restent sur une ligne (une espace insécable ne suffit pas à côté d'un inline-block). */
+.meter { white-space: nowrap; }
+.track { display: inline-block; width: 80px; vertical-align: middle; }
+.bar { display: block; height: 8px; width: var(--w); background: var(--accent); border-radius: 2px; }
 .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px 24px; }
 .slider { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; align-items: center; }
 .slider input[type=range] { grid-column: 1 / -1; width: 100%; }

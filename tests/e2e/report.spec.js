@@ -153,6 +153,28 @@ test('tendance : dernière semaine complète comparée à la semaine calendaire 
   await expect(page.locator('#summary')).toContainText(/2026-W42 : [+−-]?\d+\u00a0% par rapport à 2026-W41/);
 });
 
+test('indicateurs : chaque barre de « Contexte repayé » mesure sa part d’une piste fixe, sur la ligne de son pourcentage (sinon points illisibles)', async ({ page }) => {
+  // 760 px : deux cartes par ligne, les plus étroites ; 420 px : une seule colonne.
+  for (const width of [760, 420]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(fullUrl);
+    const bars = await page.locator('#indicators .bar').evaluateAll((els) => els.map((b) => {
+      const track = b.parentElement.getBoundingClientRect(), r = b.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(b.closest('td'));
+      const text = [...range.getClientRects()].at(-1);
+      return { w: parseFloat(b.style.getPropertyValue('--w')), share: (100 * r.width) / track.width, track: track.width, sameLine: r.top < text.bottom && r.bottom > text.top };
+    }));
+    expect(bars).toHaveLength(5);
+    expect(bars.some((x) => x.w > 0)).toBe(true);
+    for (const x of bars) {
+      expect(x.track).toBeGreaterThanOrEqual(60);
+      expect(Math.abs(x.share - x.w)).toBeLessThan(1);
+      expect(x.sameLine, `${width} px`).toBe(true);
+    }
+  }
+});
+
 test('la bascule d’unité réutilise les derniers résultats : what-if ni reconstruit ni rejoué', async ({ page }) => {
   await page.goto(fullUrl);
   await expect(page.locator('#ch-sweep canvas')).toHaveCount(1);   // balayage terminé, par morceaux

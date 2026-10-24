@@ -244,7 +244,7 @@ function renderIndicators() {
   const card = (title, pairs) => `<div class="card"><h3>${title}</h3><table>${rows(pairs)}</table></div>`;
   $('indicators').innerHTML = `<h2>${T.indicators}</h2><div class="grid">
     ${card(T.ind.context, [
-      ...T.ctxBucketLabels.map((l, i) => [l, `<span class="bar" style="--w:${((100 * t.ctxBuckets[i]) / n).toFixed(1)}%"></span> ${fmtShare(t.ctxBuckets[i] / n)}`]),
+      ...T.ctxBucketLabels.map((l, i) => [l, `<span class="meter"><span class="track"><span class="bar" style="--w:${((100 * t.ctxBuckets[i]) / n).toFixed(1)}%"></span></span> ${fmtShare(t.ctxBuckets[i] / n)}</span>`]),
       [T.ind.over150k, fmtShare(ratio(t.costOver150k, t.cost))],
       [T.ind.maxCtx, fmtTok(t.maxCtx)],
     ])}
