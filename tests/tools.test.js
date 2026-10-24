@@ -52,3 +52,41 @@ test('un seul Read qui rend une image et du texte n’est pas une relecture de l
   const s = withOutputs(session(BASE), ['Read'], [[1, 0, 1_560, 1, 0], [1, 0, 1_000, 0, 0]]);
   assert.equal(toolCosts([s]).rereads.n, 0);
 });
+
+test('skills : sous-ensemble de la ligne Skill, au prorata de leurs tokens, jamais plus que la ligne Skill', () => {
+  const s = withOutputs(session(BASE), ['Skill', 'Bash'],
+    [[1, 0, 15], [1, 0, 8_000, 0, -1, 0], [1, 1, 10_000], [2, 0, 4_000, 0, -1, 1]], ['brainstorming', 'handoff']);
+  const r = toolCosts([s]);
+  const skill = r.tools.find((x) => x.tool === 'Skill');
+  assert.deepEqual(r.skills.map((x) => [x.skill, x.n, x.tok]), [['brainstorming', 1, 8_000], ['handoff', 1, 4_000]]);
+  assert.ok(near(r.skills[0].cost.wtok, (8_000 / 70_010) * 41_510 + (8_000 / 80_010) * 19_510));
+  assert.ok(near(r.skills[1].cost.wtok, (4_000 / 80_010) * 19_510));
+  assert.deepEqual([skill.n, skill.tok], [3, 12_015]);
+  assert.ok(r.skills.reduce((a, x) => a + x.cost.wtok, 0) < skill.cost.wtok);   // la ligne Skill compte aussi « Launching skill »
+});
+
+test('skills : même skill chargé deux fois → deux chargements, chacun repayé depuis son tour', () => {
+  const s = withOutputs(session(BASE), ['Skill'], [[1, 0, 8_000, 0, -1, 0], [2, 0, 8_000, 0, -1, 0]], ['brainstorming']);
+  const r = toolCosts([s]);
+  assert.deepEqual([r.skills[0].n, r.skills[0].tok], [2, 16_000]);
+  assert.ok(near(r.skills[0].cost.wtok, (8_000 / 70_010) * 41_510 + (16_000 / 80_010) * 19_510));
+});
+
+test('skills : compactage → le texte sort du contexte, il ne coûte plus rien ensuite', () => {
+  const s = withOutputs(session(BASE, { events: [{ t: T + 90, kind: 'compact', trigger: 'auto', pre: 70_010, post: 9_000 }] }),
+    ['Skill'], [[1, 0, 8_000, 0, -1, 0]], ['brainstorming']);
+  assert.ok(near(toolCosts([s]).skills[0].cost.wtok, (8_000 / 70_010) * 41_510));
+});
+
+test('grosses sorties : un texte de skill n’en est pas une (aucun head ne le tronque) ; une sortie d’outil de même taille l’est', () => {
+  const s = withOutputs(session(BASE), ['Skill'], [[1, 0, 12_000, 0, -1, 0], [1, 0, 12_000]], ['gros-skill']);
+  assert.equal(toolCosts([s]).tools[0].big, 1);
+});
+
+test('session lue en version 5 (tr sans skill) : aucun skill, ligne Skill inchangée, sans erreur', () => {
+  const s = withOutputs(session(BASE), ['Skill'], [[1, 0, 8_000]]);
+  delete s.tr.skill;
+  const r = toolCosts([s]);
+  assert.deepEqual(r.skills, []);
+  assert.deepEqual([r.tools[0].n, r.tools[0].tok], [1, 8_000]);
+});

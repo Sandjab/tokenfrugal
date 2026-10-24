@@ -348,3 +348,16 @@ test('sous-agent Haiku 5.5 au-delà de 100 000 tokens : réel au palier, jamais 
   assert.ok(near(r.real.usd, (251 + 76_255) / 1e6));
   assert.deepEqual([r.sim.usd, r.sim.wtok], [r.real.usd, r.real.wtok]);
 });
+
+test('plafond texte : un texte de skill n’est pas plafonné (sinon la recommandation compte un gain impossible)', () => {
+  const skill = withOutputs(A, ['Skill'], [[1, 0, 20_000, 0, -1, 0]], ['gros-skill']);
+  assert.equal(whatIf([skill], { textCap: 5_000 }).sim.wtok, whatIf([skill], NEUTRAL).sim.wtok);
+  const tool = withOutputs(A, ['Bash'], [[1, 0, 20_000]]);
+  assert.ok(whatIf([tool], { textCap: 5_000 }).sim.wtok < whatIf([tool], NEUTRAL).sim.wtok);
+});
+
+test('plafond texte sur une session lue en version 5 (tr sans skill) : plafonnée comme avant', () => {
+  const s = withOutputs(A, ['Bash'], [[1, 0, 20_000]]);
+  delete s.tr.skill;
+  assert.ok(near(whatIf([s], { textCap: 5_000 }).sim.wtok, 50_010 + 40_010 + 18_010));
+});

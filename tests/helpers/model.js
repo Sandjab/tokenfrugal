@@ -12,8 +12,9 @@ export function session(turns, { events = [], clearStart = false, model = 'claud
 // Égalité à une tolérance relative près (les coûts passent par des divisions flottantes).
 export const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
-// Ajoute des sorties d'outils à une session : rows = [[at, indice d'outil, tokens, image (0/1), fichier]].
-export const withOutputs = (s, tools, rows) => ({
-  ...s, tools,
-  tr: { at: rows.map((r) => r[0]), tool: rows.map((r) => r[1]), tok: rows.map((r) => r[2]), img: rows.map((r) => r[3] ?? 0), file: rows.map((r) => r[4] ?? -1), unsized: 0 },
+// Ajoute des sorties d'outils à une session : rows = [[at, indice d'outil, tokens, image (0/1), fichier, skill (indice
+// dans skills, −1)]].
+export const withOutputs = (s, tools, rows, skills) => ({
+  ...s, tools, ...(skills ? { skills } : {}),
+  tr: { at: rows.map((r) => r[0]), tool: rows.map((r) => r[1]), tok: rows.map((r) => r[2]), img: rows.map((r) => r[3] ?? 0), file: rows.map((r) => r[4] ?? -1), skill: rows.map((r) => r[5] ?? -1), unsized: 0 },
 });

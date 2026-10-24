@@ -89,9 +89,11 @@ export function whatIf(sessions, params = {}, range = {}) {
     let lastModel = null;
     const firstModel = s.t.map((_, i) => i).filter((i) => !s.sub[i] && costOf(partsOf(s.in[i], s.out[i], s.cr[i], s.cw[i], s.cw1h[i]), s.models[s.m[i]]))
       .map((i) => s.models[s.m[i]])[0] ?? null;
-    // Plafonds des sorties d'outils : tokens retirés du contexte simulé au tour où chaque sortie entre.
+    // Plafonds des sorties d'outils : tokens retirés du contexte simulé au tour où chaque sortie entre. Un texte de
+    // skill n'est pas plafonné : aucun head ni filtre ne le tronque (spec skills § 4.1).
     const cutAt = new Map();
     if (s.tr) s.tr.at.forEach((at, k) => {
+      if (s.tr.skill && s.tr.skill[k] >= 0) return;
       const cut = Math.max(0, s.tr.tok[k] - (s.tr.img[k] ? p.imageCap : p.textCap));
       if (cut) cutAt.set(at, (cutAt.get(at) || 0) + cut);
     });
