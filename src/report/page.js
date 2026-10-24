@@ -7,6 +7,7 @@ import { whatIf, measuredDefaults, DEFAULTS, PAUSE_SWITCH_MIN_1H } from '../mode
 import { recommend } from '../model/recommend.js';
 import { byProject, projectLabels } from '../model/projects.js';
 import { toolCosts } from '../model/tools.js';
+import { lostCosts } from '../model/lost.js';
 import { switchList, switchSummary, switchAnswer } from '../model/switches.js';
 import { T, fmtCost, fmtTok, fmtPct, fmtShare, fmtAxis, recommendationText, switchAnswerText, setLang, getLang, pickLang } from './strings.js';
 
@@ -26,6 +27,7 @@ const SLIDERS = [
 let DATA, ALL, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, PROJECTS, LABELS, state, afterRender = null;
 let projectRows = null;   // { period, rows } : le tableau « Par projet » ne dépend que de la période
 let toolRows = null;      // { key, r } : blocs « Sorties d'outils » et « Skills », selon la période et le projet
+let lostRows = null;      // { key, r } : bloc « Tours perdus », selon la période et le projet
 let switchCache = null;   // { project, list } : la liste des bascules ne dépend que du projet
 const ALL_ON = () => ({ threshold: true, pauseSwitchMin: true, textCap: true, imageCap: true });
 const charts = new Map();
@@ -76,6 +78,7 @@ export function renderReport(data, onRender = null) {
   LABELS = projectLabels(PROJECTS);
   projectRows = null;
   toolRows = null;
+  lostRows = null;
   switchCache = null;
   OPTIMUM = { ...DEFAULTS, R: HYP.R, S: HYP.S, pauseSwitchMin: HYP.pauseSwitchMin };
   state = { unit: 'usd', period: 'all', project: 'all', values: { ...OPTIMUM }, on: ALL_ON(), cache1h: false, subModel: true };
@@ -116,6 +119,7 @@ function renderAll() {
   renderIndicators();
   renderTools();
   renderSkills();
+  renderLost();
   renderSwitches();
   buildWhatIf();
   if (lastWhatIf) showWhatIf(); else updateWhatIf();
@@ -300,6 +304,22 @@ function renderSkills() {
     <p class="note">${T.skillsNote}</p>`;
 }
 
+// Tours perdus sur la période et le projet choisis (spec tours perdus § 5.1). Recalculé seulement quand l'un des deux
+// change. Un code de cause inconnu (historique importé) est échappé.
+function renderLost() {
+  const key = `${state.period}|${state.project}`;
+  if (lostRows?.key !== key) lostRows = { key, r: lostCosts(SESSIONS, range()) };
+  const { causes, total, series } = lostRows.r, all = mergeWeeks(periodWeeks()).cost;
+  if (!total.n) { $('lost').innerHTML = `<h2>${T.lost}</h2><p>${T.noLost}</p><p class="note">${T.lostNote}</p>`; return; }
+  $('lost').innerHTML = `<h2>${T.lost}</h2>
+    <p>${T.lostHead(total.n, money(total.cost), fmtShare(ratio(total.cost, all)), series.n, money(series.cost))}</p>
+    <div class="scroll"><table><thead><tr>${T.lostCols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${causes.map((x) => `<tr><th scope="row">${T.lostCause[x.cause] ?? esc(x.cause)}</th><td>${x.n}</td><td>${money(x.cost)}</td>
+      <td>${fmtShare(ratio(x.cost, all))}</td><td class="advice">${T.lostAdvice[x.cause] ?? '—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="note">${T.lostNote}</p>`;
+}
+
 // Bascules sur la période et le projet choisis (spec bascules § 5.1).
 function renderSwitches() {
   if (switchCache?.project !== state.project) switchCache = { project: state.project, list: switchList(SESSIONS) };
@@ -445,6 +465,7 @@ function renderUnit() {
   renderIndicators();
   renderTools();
   renderSkills();
+  renderLost();
   renderSwitches();
   showWhatIf();
   showSweep();

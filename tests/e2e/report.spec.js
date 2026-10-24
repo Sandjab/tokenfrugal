@@ -72,7 +72,9 @@ test.beforeAll(async () => {
   const outils = [user({ t: T0, cwd: '/home/u/outils' }),
     assistantTool({ t: T0 + 5, id: 'k0', input: 10, cw: 30_000, output: 100, uses: [['b1', 'Bash'], ['s1', 'Skill', { skill: 'mon-skill' }]] }),
     toolResults({ t: T0 + 6, results: [['b1', 'x'.repeat(80_000)], ['s1', 'Launching skill: mon-skill']] }),
-    skillBody({ t: T0 + 6, src: 's1', chars: 20_000 })];
+    skillBody({ t: T0 + 6, src: 's1', chars: 20_000 }),
+    assistantTool({ t: T0 + 7, id: 'kL', input: 10, cr: 30_000, output: 100, uses: [['e1', 'Bash']] }),
+    toolResults({ t: T0 + 8, results: [['e1', 'Exit code 1', true]] })];
   for (let i = 1; i <= 10; i++) outils.push(assistant({ t: T0 + 5 + 60 * i, id: `k${i}`, input: 10, cr: 30_000 + 20_000 * i, cw: 20_000, output: 100 }));
   const storeT = tmpStore();
   await collect({ projectsDir: writeProjects({ 'p-outils': { o1: { main: outils } }, 'p-plain': { q1: proj('/home/u/plain', T0 + 7200, 30_000) } }), storeDir: storeT });
@@ -376,6 +378,16 @@ test('skills : mon-skill en tête ; projet sans skill → phrase « aucun skill 
   await page.selectOption('#project', { label: 'plain' });
   await expect(page.locator('#skills table')).toHaveCount(0);
   await expect(page.locator('#skills')).toContainText('Aucun skill chargé sur la période');
+});
+
+test('tours perdus : phrase d’en-tête, « Commande en échec » en tête ; projet sans échec → « aucun tour perdu »', async ({ page }) => {
+  await page.goto(toolsUrl);
+  await expect(page.locator('#lost h2')).toHaveText('Tours perdus');
+  await expect(page.locator('#lost p').first()).toContainText('1 tour perdu,');
+  await expect(page.locator('#lost tbody th').first()).toHaveText('Commande en échec');
+  await page.selectOption('#project', { label: 'plain' });
+  await expect(page.locator('#lost table')).toHaveCount(0);
+  await expect(page.locator('#lost')).toContainText('Aucun tour perdu sur la période');
 });
 
 test('curseur du plafond texte : couper le levier change le coût simulé ; note « gain optimiste »', async ({ page }) => {

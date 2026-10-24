@@ -24,6 +24,7 @@ footer { color: var(--muted); font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; }
 td { text-align: right; }
+td.advice { text-align: left; }
 th[scope=row] { font-weight: normal; color: var(--muted); }
 .scroll { overflow-x: auto; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
