@@ -46,8 +46,8 @@ estimate.
 
 ## Privacy
 
-Only numbers, times, model names, project folder names and hashed identifiers are stored — never a
-line of conversation or a file path. An automated test checks this on the stored data, the history file and the pages.
+Only numbers, times, model names, project folder names, tool and skill names and hashed identifiers are stored —
+never a line of conversation or a file path. An automated test checks this on the stored data, the history file and the pages.
 
 ## Development
 
