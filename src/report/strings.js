@@ -19,7 +19,12 @@ export function fmtCost(c, unit) {
   return lang === 'fr' ? `${nf(2).format(c.usd)} $` : `$${nf(2).format(c.usd)}`;
 }
 export const fmtPct = (x) => `${x >= 0 ? '+' : ''}${nf(0).format(x * 100)}${sp()}%`;
-export const fmtShare = (x) => `${nf(0).format(x * 100)}${sp()}%`;
+// Part : une décimale sous 1 % (sinon chaque petit poste affiche 0 %), « < 0,1 % » quand elle s'arrondirait à 0,0.
+export const fmtShare = (x) => {
+  const p = x * 100;
+  if (p > 0 && p < 0.05) return `< ${nf(1).format(0.1)}${sp()}%`;
+  return `${nf(p > 0 && p < 0.95 ? 1 : 0).format(p)}${sp()}%`;
+};
 // Graduation d'un axe de graphique. Dans le canvas, l'espace fine insécable (U+202F) des milliers
 // français ne fait que 1,7 px et disparaît à l'œil : on la remplace par une espace insécable ordinaire.
 export const fmtAxis = (v, unit) => (unit === 'usd' ? fmtCost({ usd: v, wtok: 0 }, 'usd') : fmtTok(v)).replace(/\u202f/g, '\u00a0');

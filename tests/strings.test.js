@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STRINGS, T, setLang, getLang, pickLang, fmtTok, fmtCost, fmtPct, fmtAxis, recommendationText } from '../src/report/strings.js';
+import { STRINGS, T, setLang, getLang, pickLang, fmtTok, fmtCost, fmtPct, fmtShare, fmtAxis, recommendationText } from '../src/report/strings.js';
 
 // Même forme dans les deux langues : mêmes clés, même nombre de paramètres, même longueur de liste.
 function shape(x) {
@@ -43,5 +43,13 @@ test('axes des graphiques : séparateur de milliers visible (l’espace fine U+2
   assert.equal(fmtAxis(9_000_000_000, 'wtok'), '9 000,0 M');
   setLang('en');
   assert.equal(fmtAxis(42_500, 'usd'), '$42,500.00');
+  setLang('fr');
+});
+
+test('parts : une décimale sous 1 % (sinon chaque petit poste affiche 0 %), « < 0,1 % » sous 0,05 %, entières au-delà', () => {
+  setLang('fr');
+  assert.deepEqual([0, 0.0004, 0.0049, 0.0094, 0.0096, 0.06].map(fmtShare), ['0 %', '< 0,1 %', '0,5 %', '0,9 %', '1 %', '6 %']);
+  setLang('en');
+  assert.deepEqual([0, 0.0004, 0.0049, 0.06].map(fmtShare), ['0%', '< 0.1%', '0.5%', '6%']);
   setLang('fr');
 });
