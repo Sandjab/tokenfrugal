@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { collect, loadSessions } from '../../src/store/store.js';
 import { buildReport } from '../../src/report/build.js';
 import { ANALYZER_VERSION } from '../../src/read/session.js';
-import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults, clearLines } from '../helpers/logs.js';
+import { T0, writeProjects, tmpStore, assistant, user, assistantTool, toolResults, clearLines, skillBody } from '../helpers/logs.js';
 import { session } from '../helpers/model.js';
 
 let fullUrl, emptyUrl, weeksUrl, bigUrl, projUrl, legacyUrl, toolsUrl, switchesUrl, subUrl;
@@ -70,8 +70,9 @@ test.beforeAll(async () => {
   legacyUrl = pathToFileURL(legacyFile).href;
   // Une session dont une sortie Bash de 20 000 tokens reste dans un contexte qui grossit ; un projet sans outils.
   const outils = [user({ t: T0, cwd: '/home/u/outils' }),
-    assistantTool({ t: T0 + 5, id: 'k0', input: 10, cw: 30_000, output: 100, uses: [['b1', 'Bash']] }),
-    toolResults({ t: T0 + 6, results: [['b1', 'x'.repeat(80_000)]] })];
+    assistantTool({ t: T0 + 5, id: 'k0', input: 10, cw: 30_000, output: 100, uses: [['b1', 'Bash'], ['s1', 'Skill', { skill: 'mon-skill' }]] }),
+    toolResults({ t: T0 + 6, results: [['b1', 'x'.repeat(80_000)], ['s1', 'Launching skill: mon-skill']] }),
+    skillBody({ t: T0 + 6, src: 's1', chars: 20_000 })];
   for (let i = 1; i <= 10; i++) outils.push(assistant({ t: T0 + 5 + 60 * i, id: `k${i}`, input: 10, cr: 30_000 + 20_000 * i, cw: 20_000, output: 100 }));
   const storeT = tmpStore();
   await collect({ projectsDir: writeProjects({ 'p-outils': { o1: { main: outils } }, 'p-plain': { q1: proj('/home/u/plain', T0 + 7200, 30_000) } }), storeDir: storeT });
@@ -344,6 +345,15 @@ test('sorties d’outils : Bash en tête, lignes « dont images » et « dont re
   await expect(page.locator('#tools')).toContainText('dont relectures de fichiers');
   await page.selectOption('#project', { label: 'plain' });
   await expect(page.locator('#tools tbody th', { hasText: 'Bash' })).toHaveCount(0);
+});
+
+test('skills : mon-skill en tête ; projet sans skill → phrase « aucun skill » au lieu du tableau', async ({ page }) => {
+  await page.goto(toolsUrl);
+  await expect(page.locator('#skills h2')).toHaveText('Skills');
+  await expect(page.locator('#skills tbody th').first()).toHaveText('mon-skill');
+  await page.selectOption('#project', { label: 'plain' });
+  await expect(page.locator('#skills table')).toHaveCount(0);
+  await expect(page.locator('#skills')).toContainText('Aucun skill chargé sur la période');
 });
 
 test('curseur du plafond texte : couper le levier change le coût simulé ; note « gain optimiste »', async ({ page }) => {

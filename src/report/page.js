@@ -25,7 +25,7 @@ const SLIDERS = [
 // ALL : toutes les sessions ; SESSIONS : celles du projet choisi, dont partent les calculs (spec projets § 5.1).
 let DATA, ALL, SESSIONS, WEEKS, HYP, RECOS, LAST, OPTIMUM, PROJECTS, LABELS, state, afterRender = null;
 let projectRows = null;   // { period, rows } : le tableau « Par projet » ne dépend que de la période
-let toolRows = null;      // { key, r } : le bloc « Sorties d'outils » dépend de la période et du projet
+let toolRows = null;      // { key, r } : blocs « Sorties d'outils » et « Skills », selon la période et le projet
 let switchCache = null;   // { project, list } : la liste des bascules ne dépend que du projet
 const ALL_ON = () => ({ threshold: true, pauseSwitchMin: true, textCap: true, imageCap: true });
 const charts = new Map();
@@ -115,6 +115,7 @@ function renderAll() {
   renderProjects();
   renderIndicators();
   renderTools();
+  renderSkills();
   renderSwitches();
   buildWhatIf();
   if (lastWhatIf) showWhatIf(); else updateWhatIf();
@@ -261,12 +262,15 @@ function renderIndicators() {
   </div>`;
 }
 
-// Sorties d'outils sur la période et le projet choisis (spec sorties d'outils § 5.1). Recalculé seulement
-// quand l'un des deux change : ni l'unité ni la langue ne le refont.
-function renderTools() {
+// Sorties d'outils et skills sur la période et le projet choisis (spec sorties d'outils § 5.1, spec skills § 5.1).
+// Recalculé seulement quand l'un des deux change : ni l'unité ni la langue ne le refont.
+function toolsFor() {
   const key = `${state.period}|${state.project}`;
   if (toolRows?.key !== key) toolRows = { key, r: toolCosts(SESSIONS, range()) };
-  const { tools, images, rereads } = toolRows.r, total = mergeWeeks(periodWeeks()).cost;
+  return toolRows.r;
+}
+function renderTools() {
+  const { tools, images, rereads } = toolsFor(), total = mergeWeeks(periodWeeks()).cost;
   const top = tools.slice(0, 12), rest = tools.slice(12);
   const other = { n: 0, tok: 0, big: 0, cost: { usd: 0, wtok: 0 } };
   for (const x of rest) { other.n += x.n; other.tok += x.tok; other.big += x.big; other.cost.usd += x.cost.usd; other.cost.wtok += x.cost.wtok; }
@@ -279,6 +283,21 @@ function renderTools() {
     ${line(T.ofImages, images, false)}${line(T.ofRereads, rereads)}
     </tbody></table></div>
     <p class="note">${T.toolsNote}</p>`;
+}
+
+function renderSkills() {
+  const { skills } = toolsFor(), total = mergeWeeks(periodWeeks()).cost;
+  const top = skills.slice(0, 12), rest = skills.slice(12);
+  const other = { n: 0, tok: 0, cost: { usd: 0, wtok: 0 } };
+  for (const x of rest) { other.n += x.n; other.tok += x.tok; other.cost.usd += x.cost.usd; other.cost.wtok += x.cost.wtok; }
+  const line = (label, x) => `<tr><th scope="row">${label}</th><td>${x.n}</td><td>${fmtTok(x.tok)}</td>
+    <td>${money(x.cost)}</td><td>${fmtShare(ratio(x.cost, total))}</td></tr>`;
+  const table = `<div class="scroll"><table><thead><tr>${T.skillCols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${top.map((x) => line(esc(x.skill), x)).join('')}
+    ${rest.length ? line(T.otherSkills, other) : ''}
+    </tbody></table></div>`;
+  $('skills').innerHTML = `<h2>${T.skills}</h2>${skills.length ? table : `<p>${T.noSkills}</p>`}
+    <p class="note">${T.skillsNote}</p>`;
 }
 
 // Bascules sur la période et le projet choisis (spec bascules § 5.1).
@@ -425,6 +444,7 @@ function renderUnit() {
   renderProjects();
   renderIndicators();
   renderTools();
+  renderSkills();
   renderSwitches();
   showWhatIf();
   showSweep();
